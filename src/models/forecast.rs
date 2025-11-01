@@ -2,29 +2,33 @@ use serde::{Deserialize, Deserializer, Serialize, de};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Forecast {
+    #[serde(rename = "Sold to Company")]
     pub sold_to_company: String,
+    #[serde(rename = "Project Manager")]
     pub project_manager: String,
+    #[serde(rename = "Project")]
     pub project_name: String,
+    #[serde(rename = "ID")]
     pub project_id: String,
+    #[serde(rename = "Class")]
     pub class: String,
+    #[serde(rename = "Contract Start Date")]
     pub start_date: String,
+    #[serde(rename = "Contract Finish Date")]
     pub finish_date: String,
-    #[serde(deserialize_with = "deserialize_float_from_empty_string")]
+    #[serde(rename = "Contract Total Value", deserialize_with = "deserialize_float_from_empty_string")]
     pub contract_total_value: f64,
-    #[serde(deserialize_with = "deserialize_float_from_empty_string")]
+    #[serde(rename = "Contract Remaining Value", deserialize_with = "deserialize_float_from_empty_string")]
     pub contract_remaining_value: f64,
+    #[serde(rename = "Currency")]
     pub currency: String,
-    #[serde(deserialize_with = "deserialize_float_from_empty_string")]
+    // Note: Labor Rev Committ columns are parsed manually in csv_loader
+    // since there are multiple columns with the same name
     pub month1_labor_revenue_commit: f64,
-    #[serde(deserialize_with = "deserialize_float_from_empty_string")]
     pub month2_labor_revenue_commit: f64,
-    #[serde(deserialize_with = "deserialize_float_from_empty_string")]
     pub month3_labor_revenue_commit: f64,
-    #[serde(deserialize_with = "deserialize_float_from_empty_string")]
     pub month4_labor_revenue_commit: f64,
-    #[serde(deserialize_with = "deserialize_float_from_empty_string")]
     pub month5_labor_revenue_commit: f64,
-    #[serde(deserialize_with = "deserialize_float_from_empty_string")]
     pub month6_labor_revenue_commit: f64,
 }
 
