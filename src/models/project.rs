@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct Project {
     pub project_id: String,
     pub end_customer_name: String,

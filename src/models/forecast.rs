@@ -1,7 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize, de};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ForecastRow {
+pub struct Forecast {
     pub sold_to_company: String,
     pub project_manager: String,
     pub project_name: String,
