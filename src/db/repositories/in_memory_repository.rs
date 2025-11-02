@@ -27,6 +27,10 @@ impl ProjectRepositoryTrait for InMemoryRepository {
     fn find_by_id(&self, project_id: &str) -> Option<crate::models::project::Project> {
         self.project_repository.find_by_id(project_id)
     }
+
+    fn delete_by_id(&self, project_id: &str) -> bool {
+        self.project_repository.delete_by_id(project_id)
+    }
 }
 
 impl ForecastRepositoryTrait for InMemoryRepository {

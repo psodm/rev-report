@@ -6,6 +6,7 @@ pub trait ProjectRepositoryTrait {
     fn insert(&self, project: Project);
     fn find_all(&self) -> Vec<Project>;
     fn find_by_id(&self, project_id: &str) -> Option<Project>;
+    fn delete_by_id(&self, project_id: &str) -> bool;
 }
 
 pub struct ProjectRepository {
@@ -54,6 +55,19 @@ impl ProjectRepositoryTrait for ProjectRepository {
                 // Recover from poison - data is still valid
                 let data = poison_error.into_inner();
                 data.get(project_id).cloned()
+            }
+        }
+    }
+
+    fn delete_by_id(&self, project_id: &str) -> bool {
+        match self.data.lock() {
+            Ok(mut data) => {
+                data.remove(project_id).is_some()
+            }
+            Err(poison_error) => {
+                // Recover from poison - data is still valid
+                let mut data = poison_error.into_inner();
+                data.remove(project_id).is_some()
             }
         }
     }

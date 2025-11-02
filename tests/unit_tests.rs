@@ -4,6 +4,7 @@ use rev_report::db::repositories::in_memory_repository::InMemoryRepository;
 use rev_report::db::repositories::project_repository::{ProjectRepository, ProjectRepositoryTrait};
 use rev_report::models::forecast::Forecast;
 use rev_report::models::project::Project;
+use rev_report::services::project_service::ProjectService;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
@@ -125,6 +126,82 @@ fn test_project_repository_insert_updates_existing() {
 #[test]
 fn test_project_repository_find_all_empty() {
     let repo = ProjectRepository::new();
+    let projects = repo.find_all();
+    assert_eq!(projects.len(), 0);
+}
+
+#[test]
+fn test_project_repository_delete_by_id_exists() {
+    let repo = ProjectRepository::new();
+    let project1 = create_test_project("PROJ-001", "Test Project 1");
+    let project2 = create_test_project("PROJ-002", "Test Project 2");
+    repo.insert(project1);
+    repo.insert(project2);
+    
+    // Verify both projects exist
+    let projects = repo.find_all();
+    assert_eq!(projects.len(), 2);
+    
+    // Delete one project
+    let deleted = repo.delete_by_id("PROJ-001");
+    assert!(deleted);
+    
+    // Verify it was deleted
+    let projects_after = repo.find_all();
+    assert_eq!(projects_after.len(), 1);
+    assert_eq!(projects_after[0].project_id, "PROJ-002");
+    
+    // Verify it can't be found by ID
+    let found = repo.find_by_id("PROJ-001");
+    assert!(found.is_none());
+}
+
+#[test]
+fn test_project_repository_delete_by_id_not_exists() {
+    let repo = ProjectRepository::new();
+    let project = create_test_project("PROJ-001", "Test Project 1");
+    repo.insert(project);
+    
+    // Try to delete a project that doesn't exist
+    let deleted = repo.delete_by_id("PROJ-999");
+    assert!(!deleted);
+    
+    // Verify original project still exists
+    let projects = repo.find_all();
+    assert_eq!(projects.len(), 1);
+    assert_eq!(projects[0].project_id, "PROJ-001");
+}
+
+#[test]
+fn test_project_repository_delete_by_id_empty_repository() {
+    let repo = ProjectRepository::new();
+    
+    // Try to delete from empty repository
+    let deleted = repo.delete_by_id("PROJ-001");
+    assert!(!deleted);
+    
+    // Verify repository is still empty
+    let projects = repo.find_all();
+    assert_eq!(projects.len(), 0);
+}
+
+#[test]
+fn test_project_repository_delete_all_projects() {
+    let repo = ProjectRepository::new();
+    let project1 = create_test_project("PROJ-001", "Test Project 1");
+    let project2 = create_test_project("PROJ-002", "Test Project 2");
+    let project3 = create_test_project("PROJ-003", "Test Project 3");
+    
+    repo.insert(project1);
+    repo.insert(project2);
+    repo.insert(project3);
+    
+    // Delete all projects
+    assert!(repo.delete_by_id("PROJ-001"));
+    assert!(repo.delete_by_id("PROJ-002"));
+    assert!(repo.delete_by_id("PROJ-003"));
+    
+    // Verify repository is empty
     let projects = repo.find_all();
     assert_eq!(projects.len(), 0);
 }
@@ -338,6 +415,269 @@ fn test_in_memory_repository_forecast_update() {
     let found_forecast = found.unwrap();
     assert_eq!(found_forecast.project_name, "Updated Name");
     assert_eq!(found_forecast.contract_total_value, 500000.0);
+}
+
+#[test]
+fn test_in_memory_repository_project_delete_by_id_exists() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Test Project 1");
+    let project2 = create_test_project("PROJ-002", "Test Project 2");
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    
+    // Verify both projects exist
+    let projects = ProjectRepositoryTrait::find_all(&repo);
+    assert_eq!(projects.len(), 2);
+    
+    // Delete one project
+    let deleted = ProjectRepositoryTrait::delete_by_id(&repo, "PROJ-001");
+    assert!(deleted);
+    
+    // Verify it was deleted
+    let projects_after = ProjectRepositoryTrait::find_all(&repo);
+    assert_eq!(projects_after.len(), 1);
+    assert_eq!(projects_after[0].project_id, "PROJ-002");
+    
+    // Verify it can't be found by ID
+    let found = ProjectRepositoryTrait::find_by_id(&repo, "PROJ-001");
+    assert!(found.is_none());
+}
+
+#[test]
+fn test_in_memory_repository_project_delete_by_id_not_exists() {
+    let repo = InMemoryRepository::new();
+    let project = create_test_project("PROJ-001", "Test Project 1");
+    ProjectRepositoryTrait::insert(&repo, project);
+    
+    // Try to delete a project that doesn't exist
+    let deleted = ProjectRepositoryTrait::delete_by_id(&repo, "PROJ-999");
+    assert!(!deleted);
+    
+    // Verify original project still exists
+    let projects = ProjectRepositoryTrait::find_all(&repo);
+    assert_eq!(projects.len(), 1);
+    assert_eq!(projects[0].project_id, "PROJ-001");
+}
+
+#[test]
+fn test_in_memory_repository_project_delete_by_id_empty() {
+    let repo = InMemoryRepository::new();
+    
+    // Try to delete from empty repository
+    let deleted = ProjectRepositoryTrait::delete_by_id(&repo, "PROJ-001");
+    assert!(!deleted);
+    
+    // Verify repository is still empty
+    let projects = ProjectRepositoryTrait::find_all(&repo);
+    assert_eq!(projects.len(), 0);
+}
+
+#[test]
+fn test_in_memory_repository_project_delete_specific_id() {
+    let repo = InMemoryRepository::new();
+    // Insert the specific project that should be deleted
+    let special_project = create_test_project("S00000072027", "Special Project");
+    let project1 = create_test_project("PROJ-001", "Test Project 1");
+    let project2 = create_test_project("PROJ-002", "Test Project 2");
+    
+    ProjectRepositoryTrait::insert(&repo, special_project);
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    
+    // Verify all projects exist
+    let projects = ProjectRepositoryTrait::find_all(&repo);
+    assert_eq!(projects.len(), 3);
+    
+    // Delete the specific project ID
+    let deleted = ProjectRepositoryTrait::delete_by_id(&repo, "S00000072027");
+    assert!(deleted);
+    
+    // Verify it was deleted and others remain
+    let projects_after = ProjectRepositoryTrait::find_all(&repo);
+    assert_eq!(projects_after.len(), 2);
+    
+    // Verify the specific project can't be found
+    let found = ProjectRepositoryTrait::find_by_id(&repo, "S00000072027");
+    assert!(found.is_none());
+    
+    // Verify other projects still exist
+    assert!(ProjectRepositoryTrait::find_by_id(&repo, "PROJ-001").is_some());
+    assert!(ProjectRepositoryTrait::find_by_id(&repo, "PROJ-002").is_some());
+}
+
+// ========== ProjectService Tests ==========
+
+#[test]
+fn test_project_service_extract_project_manager_name_with_account_id() {
+    let input = "Putra, Kim{kp055389@broadcom.net}";
+    let result = ProjectService::extract_project_manager_name(input);
+    assert_eq!(result, "Putra, Kim");
+}
+
+#[test]
+fn test_project_service_extract_project_manager_name_without_account_id() {
+    let input = "Smith, John";
+    let result = ProjectService::extract_project_manager_name(input);
+    assert_eq!(result, "Smith, John");
+}
+
+#[test]
+fn test_project_service_extract_project_manager_name_empty_string() {
+    let input = "";
+    let result = ProjectService::extract_project_manager_name(input);
+    assert_eq!(result, "");
+}
+
+#[test]
+fn test_project_service_extract_project_manager_name_only_brace() {
+    let input = "{kp055389@broadcom.net}";
+    let result = ProjectService::extract_project_manager_name(input);
+    assert_eq!(result, "");
+}
+
+#[test]
+fn test_project_service_extract_project_manager_name_multiple_braces() {
+    let input = "Last, First{account1}{account2}";
+    let result = ProjectService::extract_project_manager_name(input);
+    assert_eq!(result, "Last, First");
+}
+
+#[test]
+fn test_project_service_extract_project_manager_name_complex_format() {
+    let input = "Doe, Jane {jd123@company.com}";
+    let result = ProjectService::extract_project_manager_name(input);
+    assert_eq!(result, "Doe, Jane ");
+}
+
+#[test]
+fn test_project_service_sanitize_on_hold_comment_with_newlines() {
+    let input = "On hold - New Resources are in progress for onboarding";
+    let result = ProjectService::sanitize_on_hold_comment(input);
+    assert_eq!(result, "On hold - New Resources are in progress for onboarding");
+}
+
+#[test]
+fn test_project_service_sanitize_on_hold_comment_with_single_newline() {
+    let input = "On hold\nNew Resources are in progress";
+    let result = ProjectService::sanitize_on_hold_comment(input);
+    assert_eq!(result, "On hold New Resources are in progress");
+}
+
+#[test]
+fn test_project_service_sanitize_on_hold_comment_with_multiple_newlines() {
+    let input = "On hold\n\nNew Resources\nare in progress";
+    let result = ProjectService::sanitize_on_hold_comment(input);
+    assert_eq!(result, "On hold New Resources are in progress");
+}
+
+#[test]
+fn test_project_service_sanitize_on_hold_comment_with_carriage_return() {
+    let input = "On hold\rNew Resources are in progress";
+    let result = ProjectService::sanitize_on_hold_comment(input);
+    assert_eq!(result, "On hold New Resources are in progress");
+}
+
+#[test]
+fn test_project_service_sanitize_on_hold_comment_with_newline_and_carriage_return() {
+    let input = "On hold\r\nNew Resources are in progress";
+    let result = ProjectService::sanitize_on_hold_comment(input);
+    assert_eq!(result, "On hold New Resources are in progress");
+}
+
+#[test]
+fn test_project_service_sanitize_on_hold_comment_empty_string() {
+    let input = "";
+    let result = ProjectService::sanitize_on_hold_comment(input);
+    assert_eq!(result, "");
+}
+
+#[test]
+fn test_project_service_sanitize_on_hold_comment_with_leading_trailing_whitespace() {
+    let input = "  On hold - New Resources are in progress  ";
+    let result = ProjectService::sanitize_on_hold_comment(input);
+    assert_eq!(result, "On hold - New Resources are in progress");
+}
+
+#[test]
+fn test_project_service_sanitize_on_hold_comment_with_newlines_and_whitespace() {
+    let input = "  On hold\n\n  New Resources\n  are in progress  ";
+    let result = ProjectService::sanitize_on_hold_comment(input);
+    assert_eq!(result, "On hold New Resources are in progress");
+}
+
+#[test]
+fn test_project_service_sanitize_on_hold_comment_no_newlines() {
+    let input = "On hold - New Resources are in progress for onboarding";
+    let result = ProjectService::sanitize_on_hold_comment(input);
+    assert_eq!(result, "On hold - New Resources are in progress for onboarding");
+}
+
+#[test]
+fn test_project_service_find_projects_without_forecasts() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let project2 = create_test_project("PROJ-002", "Project 2");
+    let project3 = create_test_project("PROJ-003", "Project 3");
+    let forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    let forecast2 = create_test_forecast("PROJ-002", "Project 2");
+    // PROJ-003 has no forecast
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    ForecastRepositoryTrait::insert(&repo, forecast2);
+    
+    let project_service = ProjectService::new(&repo);
+    let projects_without_forecasts = project_service.find_projects_without_forecasts();
+    
+    assert_eq!(projects_without_forecasts.len(), 1);
+    assert_eq!(projects_without_forecasts[0].project_id, "PROJ-003");
+}
+
+#[test]
+fn test_project_service_find_projects_without_forecasts_all_have_forecasts() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let project2 = create_test_project("PROJ-002", "Project 2");
+    let forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    let forecast2 = create_test_forecast("PROJ-002", "Project 2");
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    ForecastRepositoryTrait::insert(&repo, forecast2);
+    
+    let project_service = ProjectService::new(&repo);
+    let projects_without_forecasts = project_service.find_projects_without_forecasts();
+    
+    assert_eq!(projects_without_forecasts.len(), 0);
+}
+
+#[test]
+fn test_project_service_find_projects_without_forecasts_none_have_forecasts() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let project2 = create_test_project("PROJ-002", "Project 2");
+    let project3 = create_test_project("PROJ-003", "Project 3");
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    
+    let project_service = ProjectService::new(&repo);
+    let projects_without_forecasts = project_service.find_projects_without_forecasts();
+    
+    assert_eq!(projects_without_forecasts.len(), 3);
+}
+
+#[test]
+fn test_project_service_find_projects_without_forecasts_empty_repository() {
+    let repo = InMemoryRepository::new();
+    let project_service = ProjectService::new(&repo);
+    let projects_without_forecasts = project_service.find_projects_without_forecasts();
+    
+    assert_eq!(projects_without_forecasts.len(), 0);
 }
 
 // Helper function to create a temporary projects CSV file
