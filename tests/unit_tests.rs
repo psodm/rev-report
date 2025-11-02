@@ -778,6 +778,159 @@ fn test_project_service_find_projects_without_forecasts_mixed_scenarios() {
 }
 
 #[test]
+fn test_project_service_find_projects_without_account_executive() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.account_executive = None; // No account executive
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.account_executive = Some("".to_string()); // Empty string
+    let mut project3 = create_test_project("PROJ-003", "Project 3");
+    project3.account_executive = Some("   ".to_string()); // Whitespace only
+    let project4 = create_test_project("PROJ-004", "Project 4");
+    // Has account executive (default from create_test_project)
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    ProjectRepositoryTrait::insert(&repo, project4);
+    
+    let project_service = ProjectService::new(&repo);
+    let projects_without_ae = project_service.find_projects_without_account_executive();
+    
+    // PROJ-001, PROJ-002, and PROJ-003 should be in the list
+    // PROJ-004 has an account executive, so it should not be in the list
+    assert_eq!(projects_without_ae.len(), 3);
+    let project_ids: Vec<String> = projects_without_ae.iter().map(|p| p.project_id.clone()).collect();
+    assert!(project_ids.contains(&"PROJ-001".to_string()));
+    assert!(project_ids.contains(&"PROJ-002".to_string()));
+    assert!(project_ids.contains(&"PROJ-003".to_string()));
+    assert!(!project_ids.contains(&"PROJ-004".to_string()));
+}
+
+#[test]
+fn test_project_service_find_projects_without_account_executive_all_have_ae() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let project2 = create_test_project("PROJ-002", "Project 2");
+    // Both have account executives (from create_test_project)
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    
+    let project_service = ProjectService::new(&repo);
+    let projects_without_ae = project_service.find_projects_without_account_executive();
+    
+    assert_eq!(projects_without_ae.len(), 0);
+}
+
+#[test]
+fn test_project_service_find_projects_without_account_executive_none_have_ae() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.account_executive = None;
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.account_executive = None;
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    
+    let project_service = ProjectService::new(&repo);
+    let projects_without_ae = project_service.find_projects_without_account_executive();
+    
+    assert_eq!(projects_without_ae.len(), 2);
+}
+
+#[test]
+fn test_project_service_find_projects_without_account_executive_empty_repository() {
+    let repo = InMemoryRepository::new();
+    let project_service = ProjectService::new(&repo);
+    let projects_without_ae = project_service.find_projects_without_account_executive();
+    
+    assert_eq!(projects_without_ae.len(), 0);
+}
+
+#[test]
+fn test_project_service_find_all_account_executives() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.account_executive = Some("John Doe".to_string());
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.account_executive = Some("Jane Smith".to_string());
+    let mut project3 = create_test_project("PROJ-003", "Project 3");
+    project3.account_executive = Some("John Doe".to_string()); // Duplicate
+    let mut project4 = create_test_project("PROJ-004", "Project 4");
+    project4.account_executive = Some("Bob Johnson".to_string());
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    ProjectRepositoryTrait::insert(&repo, project4);
+    
+    let project_service = ProjectService::new(&repo);
+    let account_executives = project_service.find_all_account_executives();
+    
+    // Should have 3 unique account executives, sorted alphabetically
+    assert_eq!(account_executives.len(), 3);
+    assert_eq!(account_executives[0], "Bob Johnson");
+    assert_eq!(account_executives[1], "Jane Smith");
+    assert_eq!(account_executives[2], "John Doe");
+}
+
+#[test]
+fn test_project_service_find_all_account_executives_empty_repository() {
+    let repo = InMemoryRepository::new();
+    let project_service = ProjectService::new(&repo);
+    let account_executives = project_service.find_all_account_executives();
+    
+    assert_eq!(account_executives.len(), 0);
+}
+
+#[test]
+fn test_project_service_find_all_account_executives_no_account_executives() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.account_executive = None;
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.account_executive = Some("".to_string()); // Empty string
+    let mut project3 = create_test_project("PROJ-003", "Project 3");
+    project3.account_executive = Some("   ".to_string()); // Whitespace only
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    
+    let project_service = ProjectService::new(&repo);
+    let account_executives = project_service.find_all_account_executives();
+    
+    // Should have 0 account executives (empty/whitespace-only are ignored)
+    assert_eq!(account_executives.len(), 0);
+}
+
+#[test]
+fn test_project_service_find_all_account_executives_with_whitespace() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.account_executive = Some("  John Doe  ".to_string()); // With whitespace
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.account_executive = Some("John Doe".to_string()); // Without whitespace
+    let mut project3 = create_test_project("PROJ-003", "Project 3");
+    project3.account_executive = Some("Jane Smith".to_string());
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    
+    let project_service = ProjectService::new(&repo);
+    let account_executives = project_service.find_all_account_executives();
+    
+    // Should have 2 unique account executives (trimmed "John Doe" should be deduplicated)
+    // "  John Doe  " trimmed becomes "John Doe", so it should match the other "John Doe"
+    assert_eq!(account_executives.len(), 2);
+    assert_eq!(account_executives[0], "Jane Smith");
+    assert_eq!(account_executives[1], "John Doe");
+}
+
+#[test]
 fn test_project_service_get_projects_by_project_manager_empty_repository() {
     let repo = InMemoryRepository::new();
     let project_service = ProjectService::new(&repo);
@@ -811,10 +964,11 @@ fn test_project_service_get_projects_by_project_manager_single_manager() {
     // Check that contract values are included
     let (_, contract_values1) = &result[0].projects[0];
     assert!(contract_values1.is_some());
-    let (total1, remaining1, currency1) = contract_values1.as_ref().unwrap();
+    let (total1, remaining1, currency1, class1) = contract_values1.as_ref().unwrap();
     assert_eq!(*total1, 100000.0);
     assert_eq!(*remaining1, 75000.0);
     assert_eq!(currency1, "USD");
+    assert_eq!(class1, "Test Class");
 }
 
 #[test]
@@ -937,10 +1091,11 @@ fn test_project_service_get_projects_by_project_manager_with_different_currencie
         .find(|(p, _)| p.project_id == "PROJ-001")
         .unwrap();
     assert_eq!(proj1_item.project_id, "PROJ-001");
-    let (total1, remaining1, currency1) = contract_values1.as_ref().unwrap();
+    let (total1, remaining1, currency1, class1) = contract_values1.as_ref().unwrap();
     assert_eq!(*total1, 50000.0);
     assert_eq!(*remaining1, 37500.0);
     assert_eq!(currency1, "EUR");
+    assert_eq!(class1, "Test Class");
     
     let (proj2_item, contract_values2) = result[0]
         .projects
@@ -948,10 +1103,11 @@ fn test_project_service_get_projects_by_project_manager_with_different_currencie
         .find(|(p, _)| p.project_id == "PROJ-002")
         .unwrap();
     assert_eq!(proj2_item.project_id, "PROJ-002");
-    let (total2, remaining2, currency2) = contract_values2.as_ref().unwrap();
+    let (total2, remaining2, currency2, class2) = contract_values2.as_ref().unwrap();
     assert_eq!(*total2, 75000.0);
     assert_eq!(*remaining2, 56250.0);
     assert_eq!(currency2, "GBP");
+    assert_eq!(class2, "Test Class");
 }
 
 #[test]

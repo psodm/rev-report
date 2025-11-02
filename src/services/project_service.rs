@@ -7,11 +7,11 @@ use std::collections::HashMap;
 #[derive(Clone, Debug)]
 pub struct ProjectByProjectManager {
     pub project_manager: String,
-    pub projects: Vec<(Project, Option<(f64, f64, String)>)>, // Project and (contract_total_value, contract_remaining_value, currency)
+    pub projects: Vec<(Project, Option<(f64, f64, String, String)>)>, // Project and (contract_total_value, contract_remaining_value, currency, class)
 }
 
 pub struct ProjectService<'a> {
-    repository: &'a InMemoryRepository,
+    pub(crate) repository: &'a InMemoryRepository,
 }
 
 impl<'a> ProjectService<'a> {
@@ -64,6 +64,43 @@ impl<'a> ProjectService<'a> {
             .collect()
     }
 
+    /// Finds all projects that do not have an Account Executive (Other Stakeholder field is empty)
+    pub fn find_projects_without_account_executive(&self) -> Vec<Project> {
+        let all_projects = ProjectRepositoryTrait::find_all(self.repository);
+        all_projects
+            .into_iter()
+            .filter(|project| {
+                project.account_executive.is_none()
+                    || project
+                        .account_executive
+                        .as_ref()
+                        .map(|s| s.trim().is_empty())
+                        .unwrap_or(true)
+            })
+            .collect()
+    }
+
+    /// Finds all unique Account Executives from the Other Stakeholder field
+    /// Returns a sorted vector of unique Account Executive names
+    pub fn find_all_account_executives(&self) -> Vec<String> {
+        use std::collections::HashSet;
+        let all_projects = ProjectRepositoryTrait::find_all(self.repository);
+        let mut account_executives = HashSet::new();
+
+        for project in all_projects {
+            if let Some(ae) = &project.account_executive {
+                let trimmed_ae = ae.trim();
+                if !trimmed_ae.is_empty() {
+                    account_executives.insert(trimmed_ae.to_string());
+                }
+            }
+        }
+
+        let mut result: Vec<String> = account_executives.into_iter().collect();
+        result.sort();
+        result
+    }
+
     /// Extracts just the name from a project manager field
     /// Format: "Last, First{account_id}" -> returns "Last, First"
     pub fn extract_project_manager_name(project_manager: &str) -> &str {
@@ -92,17 +129,17 @@ impl<'a> ProjectService<'a> {
 
     /// Groups projects by project manager
     /// Returns a vector of ProjectByProjectManager, sorted by project manager name
-    /// For each project, includes optional contract values and currency from the forecast if available
+    /// For each project, includes optional contract values, currency, and class from the forecast if available
     pub fn get_projects_by_project_manager(&self) -> Vec<ProjectByProjectManager> {
         let all_projects = ProjectRepositoryTrait::find_all(self.repository);
-        let mut grouped: HashMap<String, Vec<(Project, Option<(f64, f64, String)>)>> =
+        let mut grouped: HashMap<String, Vec<(Project, Option<(f64, f64, String, String)>)>> =
             HashMap::new();
 
         for project in all_projects {
             // Extract project manager name (remove account id part)
             let project_manager_name = Self::extract_project_manager_name(&project.project_manager);
 
-            // Get contract values and currency from forecast if available
+            // Get contract values, currency, and class from forecast if available
             let contract_values =
                 ForecastRepositoryTrait::find_by_id(self.repository, &project.project_id).map(
                     |forecast| {
@@ -110,6 +147,7 @@ impl<'a> ProjectService<'a> {
                             forecast.contract_total_value,
                             forecast.contract_remaining_value,
                             forecast.currency.clone(),
+                            forecast.class.clone(),
                         )
                     },
                 );

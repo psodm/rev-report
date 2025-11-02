@@ -1,6 +1,7 @@
 use crate::db::csv_loader::load_data_from_csvs;
 use crate::db::repositories::in_memory_repository::InMemoryRepository;
 use crate::db::repositories::project_repository::ProjectRepositoryTrait;
+use crate::models::project::Project;
 use crate::services::forecast_service::ForecastService;
 use crate::services::project_service::ProjectService;
 use crate::utils::utils::format_currency;
@@ -175,7 +176,9 @@ fn display_projects_without_forecasts(project_service: &ProjectService) {
 }
 
 fn display_on_hold_projects(project_service: &ProjectService) {
-    let projects = project_service.find_on_hold_projects();
+    use crate::db::repositories::forecast_repository::ForecastRepositoryTrait;
+
+    let mut projects = project_service.find_on_hold_projects();
 
     println!();
     println!("╔══════════════════════════════════════════════════════════╗");
@@ -186,13 +189,28 @@ fn display_on_hold_projects(project_service: &ProjectService) {
     if projects.is_empty() {
         println!("✅ No projects are currently on hold.");
     } else {
+        // Sort projects by class before displaying
+        projects.sort_by(|a, b| {
+            let class_a =
+                ForecastRepositoryTrait::find_by_id(project_service.repository, &a.project_id)
+                    .map(|f| f.class.clone())
+                    .unwrap_or_else(|| String::new());
+
+            let class_b =
+                ForecastRepositoryTrait::find_by_id(project_service.repository, &b.project_id)
+                    .map(|f| f.class.clone())
+                    .unwrap_or_else(|| String::new());
+
+            class_a.cmp(&class_b)
+        });
+
         println!("Found {} on-hold project(s):\n", projects.len());
-        println!("{:-<321}", "");
+        println!("{:-<331}", "");
         println!(
-            "{:<15} {:<48} {:<98} {:<32} {:<128}",
-            "Project ID", "Customer", "Project Name", "Project Manager", "On Hold Comment"
+            "{:<15} {:<48} {:<98} {:<32} {:<10} {:<128}",
+            "Project ID", "Customer", "Project Name", "Project Manager", "Class", "On Hold Comment"
         );
-        println!("{:-<321}", "");
+        println!("{:-<331}", "");
 
         for project in projects {
             // Truncate customer name to max 44 characters
@@ -207,24 +225,135 @@ fn display_on_hold_projects(project_service: &ProjectService) {
             // Truncate project manager name to max 32 characters
             let project_manager_name = truncate_string(project_manager_full_name, 32);
 
+            // Get class from forecast if available
+            let class_display = ForecastRepositoryTrait::find_by_id(
+                project_service.repository,
+                &project.project_id,
+            )
+            .map(|f| f.class.clone())
+            .unwrap_or_else(|| "N/A".to_string());
+
             // Get on-hold comment or empty string, sanitize newlines, then truncate to max 128 characters
             let on_hold_comment = project.on_hold_comment.as_deref().unwrap_or("");
             let sanitized_comment = ProjectService::sanitize_on_hold_comment(on_hold_comment);
             let comment_display = truncate_string(&sanitized_comment, 128);
 
             println!(
-                "{:<15} {:<48} {:<98} {:<32} {:<128}",
+                "{:<15} {:<48} {:<98} {:<32} {:<10} {:<128}",
                 project.project_id,
                 customer_name,
                 project_name,
                 project_manager_name,
+                class_display,
                 comment_display
             );
         }
 
-        println!("{:-<321}", "");
+        println!("{:-<331}", "");
         println!();
     }
+}
+
+fn display_projects_without_account_executive(project_service: &ProjectService) {
+    use std::collections::HashMap;
+
+    let projects = project_service.find_projects_without_account_executive();
+
+    println!();
+    println!("╔══════════════════════════════════════════════════════════╗");
+    println!("║        Projects without Account Executive                ║");
+    println!("╚══════════════════════════════════════════════════════════╝");
+    println!();
+
+    if projects.is_empty() {
+        println!("✅ No projects without Account Executive found.");
+        println!();
+        return;
+    }
+
+    // Group projects by Project Manager
+    let mut grouped: HashMap<String, Vec<Project>> = HashMap::new();
+    for project in projects {
+        let project_manager_name =
+            ProjectService::extract_project_manager_name(&project.project_manager);
+        grouped
+            .entry(project_manager_name.to_string())
+            .or_insert_with(Vec::new)
+            .push(project);
+    }
+
+    // Convert to vector and sort by Project Manager name
+    let mut manager_groups: Vec<(String, Vec<Project>)> = grouped.into_iter().collect();
+    manager_groups.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let total_count: usize = manager_groups
+        .iter()
+        .map(|(_, projects)| projects.len())
+        .sum();
+    println!(
+        "Found {} project(s) without Account Executive:\n",
+        total_count
+    );
+
+    for (manager_name, projects) in manager_groups {
+        println!("═══════════════════════════════════════════════════════════");
+        println!("Project Manager: {}", manager_name);
+        println!("═══════════════════════════════════════════════════════════");
+        println!();
+
+        println!("{:-<193}", "");
+        println!(
+            "{:<15} {:<48} {:<98} {:<32}",
+            "Project ID", "Customer", "Project", "Project Manager"
+        );
+        println!("{:-<193}", "");
+
+        for project in projects {
+            // Truncate customer name to max 44 characters
+            let customer_name = truncate_string(&project.end_customer_name, 44);
+
+            // Truncate project name to max 94 characters
+            let project_name = truncate_string(&project.project_name, 94);
+
+            // Extract just the name from project manager (remove account id part)
+            let project_manager_full_name =
+                ProjectService::extract_project_manager_name(&project.project_manager);
+            // Truncate project manager name to max 32 characters
+            let project_manager_name = truncate_string(project_manager_full_name, 32);
+
+            println!(
+                "{:<15} {:<48} {:<98} {:<32}",
+                project.project_id, customer_name, project_name, project_manager_name
+            );
+        }
+
+        println!("{:-<193}", "");
+        println!();
+    }
+}
+
+fn display_all_account_executives(project_service: &ProjectService) {
+    let account_executives = project_service.find_all_account_executives();
+
+    println!();
+    println!("╔══════════════════════════════════════════════════════════╗");
+    println!("║              All Account Executives                      ║");
+    println!("╚══════════════════════════════════════════════════════════╝");
+    println!();
+
+    if account_executives.is_empty() {
+        println!("✅ No Account Executives found.");
+        println!();
+        return;
+    }
+
+    println!("Found {} Account Executive(s):\n", account_executives.len());
+
+    for (index, ae) in account_executives.iter().enumerate() {
+        println!("{}. {}", index + 1, ae);
+    }
+
+    println!();
 }
 
 fn display_forecasts_by_project_manager(forecast_service: &ForecastService) {
@@ -354,18 +483,19 @@ fn display_projects_by_project_manager(project_service: &ProjectService) {
         println!();
 
         // Table header
-        println!("{:-<210}", "");
+        println!("{:-<238}", "");
         println!(
-            "{:<15} {:<48} {:<94} {:<12} {:<12} {:>20} {:>20}",
+            "{:<15} {:<48} {:<94} {:<12} {:<12} {:<10} {:>20} {:>20}",
             "Project ID",
             "Customer",
             "Project Name",
             "Start Date",
             "End Date",
+            "Class",
             "Total Contract",
             "Remaining Contract"
         );
-        println!("{:-<210}", "");
+        println!("{:-<238}", "");
 
         for (project, contract_values) in &manager_group.projects {
             // Truncate customer name to max 44 characters
@@ -378,28 +508,30 @@ fn display_projects_by_project_manager(project_service: &ProjectService) {
             let start_date_display = &project.start_date;
             let end_date_display = &project.end_date;
 
-            // Format contract values with currency formatting
-            let (total_contract, remaining_contract) = match contract_values {
-                Some((total, remaining, currency)) => (
+            // Format contract values with currency formatting and get class
+            let (total_contract, remaining_contract, class_display) = match contract_values {
+                Some((total, remaining, currency, class)) => (
                     format_currency(*total, currency),
                     format_currency(*remaining, currency),
+                    class.clone(),
                 ),
-                None => ("N/A".to_string(), "N/A".to_string()),
+                None => ("N/A".to_string(), "N/A".to_string(), "N/A".to_string()),
             };
 
             println!(
-                "{:<15} {:<48} {:<94} {:<12} {:<12} {:>20} {:>20}",
+                "{:<15} {:<48} {:<94} {:<12} {:<12} {:<10} {:>20} {:>20}",
                 project.project_id,
                 customer_display,
                 project_name_display,
                 start_date_display,
                 end_date_display,
+                class_display,
                 total_contract,
                 remaining_contract
             );
         }
 
-        println!("{:-<210}", "");
+        println!("{:-<238}", "");
         println!();
     }
 }
@@ -415,6 +547,8 @@ pub fn show_main_menu(project_service: &ProjectService, forecast_service: &Forec
         let options = vec![
             "Show projects with no forecast",
             "Show on-hold projects",
+            "Show projects without Account Executive",
+            "Show all Account Executives",
             "Show forecasts by Project Manager",
             "Show all projects by Project Manager",
             "Exit",
@@ -437,14 +571,22 @@ pub fn show_main_menu(project_service: &ProjectService, forecast_service: &Forec
                 display_on_hold_projects(project_service);
             }
             2 => {
+                // Show projects without Account Executive
+                display_projects_without_account_executive(project_service);
+            }
+            3 => {
+                // Show all Account Executives
+                display_all_account_executives(project_service);
+            }
+            4 => {
                 // Show forecasts by Project Manager
                 display_forecasts_by_project_manager(forecast_service);
             }
-            3 => {
+            5 => {
                 // Show all projects by Project Manager
                 display_projects_by_project_manager(project_service);
             }
-            4 => {
+            6 => {
                 // Exit
                 println!();
                 println!("👋 Goodbye!");
