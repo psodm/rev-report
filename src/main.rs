@@ -4,13 +4,49 @@ mod services;
 mod ui;
 mod utils;
 
-fn init_logging() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
+use clap::{Parser, ValueEnum};
+
+#[derive(Parser, Debug)]
+#[command(name = "rev-report")]
+#[command(about = "Revenue Report CSV Data Loader", long_about = None)]
+struct Args {
+    /// Set the logging level (trace, debug, info, warn, error)
+    #[arg(
+        short = 'l',
+        long = "logging",
+        value_name = "LEVEL",
+        default_value = "warn"
+    )]
+    log_level: LogLevel,
+}
+
+#[derive(ValueEnum, Clone, Debug, Copy)]
+enum LogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl LogLevel {
+    fn as_str(&self) -> &'static str {
+        match self {
+            LogLevel::Trace => "trace",
+            LogLevel::Debug => "debug",
+            LogLevel::Info => "info",
+            LogLevel::Warn => "warn",
+            LogLevel::Error => "error",
+        }
+    }
+}
+
+fn init_logging(log_level: &str) {
+    // First try to use the environment variable if set, otherwise use the CLI argument
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(log_level));
+
+    tracing_subscriber::fmt().with_env_filter(env_filter).init();
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -30,7 +66,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() {
-    init_logging();
+    let args = Args::parse();
+
+    init_logging(args.log_level.as_str());
 
     if let Err(e) = run() {
         tracing::error!(error = %e, "Application error");
