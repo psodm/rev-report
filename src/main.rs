@@ -1,4 +1,8 @@
+mod db;
+mod models;
+mod services;
 mod ui;
+mod utils;
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     // For now, always run terminal UI

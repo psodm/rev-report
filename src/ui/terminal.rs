@@ -1,8 +1,10 @@
+use crate::db::csv_loader::load_data_from_csvs;
+use crate::db::repositories::in_memory_repository::InMemoryRepository;
+use crate::db::repositories::project_repository::ProjectRepositoryTrait;
+use crate::services::forecast_service::ForecastService;
+use crate::services::project_service::ProjectService;
+use crate::utils::utils::format_currency;
 use dialoguer::{Input, Select};
-use rev_report::db::csv_loader::load_data_from_csvs;
-use rev_report::db::repositories::in_memory_repository::InMemoryRepository;
-use rev_report::db::repositories::project_repository::ProjectRepositoryTrait;
-use rev_report::services::project_service::ProjectService;
 use std::path::Path;
 
 /// Safely truncates a string to a maximum number of characters (not bytes)
@@ -106,11 +108,12 @@ pub fn run_terminal_ui() -> Result<InMemoryRepository, Box<dyn std::error::Error
                 println!();
             }
 
-            // Create project service
+            // Create services
             let project_service = ProjectService::new(&repo);
+            let forecast_service = ForecastService::new(&repo);
 
             // Show main menu
-            show_main_menu(&project_service);
+            show_main_menu(&project_service, &forecast_service);
 
             Ok(repo)
         }
@@ -134,7 +137,7 @@ fn display_projects_without_forecasts(project_service: &ProjectService) {
 
     println!();
     println!("╔══════════════════════════════════════════════════════════╗");
-    println!("║        Projects Without Forecasts                        ║");
+    println!("║        Projects Without Forecast                         ║");
     println!("╚══════════════════════════════════════════════════════════╝");
     println!();
 
@@ -224,7 +227,184 @@ fn display_on_hold_projects(project_service: &ProjectService) {
     }
 }
 
-pub fn show_main_menu(project_service: &ProjectService) {
+fn display_forecasts_by_project_manager(forecast_service: &ForecastService) {
+    let forecasts_by_manager = forecast_service.get_forecasts_by_project_manager();
+
+    println!();
+    println!("╔══════════════════════════════════════════════════════════╗");
+    println!("║         Forecasts by Project Manager                     ║");
+    println!("╚══════════════════════════════════════════════════════════╝");
+    println!();
+
+    if forecasts_by_manager.is_empty() {
+        println!("✅ No forecasts found.");
+        println!();
+        return;
+    }
+
+    for manager_group in forecasts_by_manager {
+        println!("═══════════════════════════════════════════════════════════");
+        println!("Project Manager: {}", manager_group.project_manager);
+        println!("═══════════════════════════════════════════════════════════");
+        println!();
+
+        // Calculate totals for this project manager
+        let mut month_totals = [0.0; 6];
+        // Get currency code from first forecast (assuming all forecasts for a manager have same currency)
+        let currency_code = manager_group
+            .forecasts
+            .first()
+            .map(|(f, _)| f.currency.as_str())
+            .unwrap_or("USD");
+
+        // Table header
+        println!("{:-<255}", "");
+        println!(
+            "{:<15} {:<48} {:<94} {:>15} {:>15} {:>15} {:>15} {:>15} {:>15}",
+            "Project ID",
+            "Customer",
+            "Project Name",
+            "Month 1",
+            "Month 2",
+            "Month 3",
+            "Month 4",
+            "Month 5",
+            "Month 6"
+        );
+        println!("{:-<255}", "");
+
+        for (forecast, customer_name) in &manager_group.forecasts {
+            // Truncate customer name to max 44 characters
+            let customer_display = customer_name
+                .as_ref()
+                .map(|c| truncate_string(c, 44))
+                .unwrap_or("N/A");
+
+            // Truncate project name to max 94 characters
+            let project_name_display = truncate_string(&forecast.project_name, 94);
+
+            // Format currency values with thousand separators and currency symbol
+            let month1 = format_currency(forecast.month1_labor_revenue_commit, &forecast.currency);
+            let month2 = format_currency(forecast.month2_labor_revenue_commit, &forecast.currency);
+            let month3 = format_currency(forecast.month3_labor_revenue_commit, &forecast.currency);
+            let month4 = format_currency(forecast.month4_labor_revenue_commit, &forecast.currency);
+            let month5 = format_currency(forecast.month5_labor_revenue_commit, &forecast.currency);
+            let month6 = format_currency(forecast.month6_labor_revenue_commit, &forecast.currency);
+
+            // Add to totals
+            month_totals[0] += forecast.month1_labor_revenue_commit;
+            month_totals[1] += forecast.month2_labor_revenue_commit;
+            month_totals[2] += forecast.month3_labor_revenue_commit;
+            month_totals[3] += forecast.month4_labor_revenue_commit;
+            month_totals[4] += forecast.month5_labor_revenue_commit;
+            month_totals[5] += forecast.month6_labor_revenue_commit;
+
+            println!(
+                "{:<15} {:<48} {:<94} {:>15} {:>15} {:>15} {:>15} {:>15} {:>15}",
+                forecast.project_id,
+                customer_display,
+                project_name_display,
+                month1,
+                month2,
+                month3,
+                month4,
+                month5,
+                month6
+            );
+        }
+
+        // Print totals row
+        println!("{:-<255}", "");
+        println!(
+            "{:<15} {:<48} {:<94} {:>15} {:>15} {:>15} {:>15} {:>15} {:>15}",
+            "",
+            "TOTAL",
+            "",
+            format_currency(month_totals[0], currency_code),
+            format_currency(month_totals[1], currency_code),
+            format_currency(month_totals[2], currency_code),
+            format_currency(month_totals[3], currency_code),
+            format_currency(month_totals[4], currency_code),
+            format_currency(month_totals[5], currency_code)
+        );
+        println!("{:-<255}", "");
+        println!();
+    }
+}
+
+fn display_projects_by_project_manager(project_service: &ProjectService) {
+    let projects_by_manager = project_service.get_projects_by_project_manager();
+
+    println!();
+    println!("╔══════════════════════════════════════════════════════════╗");
+    println!("║         All Projects by Project Manager                  ║");
+    println!("╚══════════════════════════════════════════════════════════╝");
+    println!();
+
+    if projects_by_manager.is_empty() {
+        println!("✅ No projects found.");
+        println!();
+        return;
+    }
+
+    for manager_group in projects_by_manager {
+        println!("═══════════════════════════════════════════════════════════");
+        println!("Project Manager: {}", manager_group.project_manager);
+        println!("═══════════════════════════════════════════════════════════");
+        println!();
+
+        // Table header
+        println!("{:-<210}", "");
+        println!(
+            "{:<15} {:<48} {:<94} {:<12} {:<12} {:>20} {:>20}",
+            "Project ID",
+            "Customer",
+            "Project Name",
+            "Start Date",
+            "End Date",
+            "Total Contract",
+            "Remaining Contract"
+        );
+        println!("{:-<210}", "");
+
+        for (project, contract_values) in &manager_group.projects {
+            // Truncate customer name to max 44 characters
+            let customer_display = truncate_string(&project.end_customer_name, 44);
+
+            // Truncate project name to max 94 characters
+            let project_name_display = truncate_string(&project.project_name, 94);
+
+            // Format dates
+            let start_date_display = &project.start_date;
+            let end_date_display = &project.end_date;
+
+            // Format contract values with currency formatting
+            let (total_contract, remaining_contract) = match contract_values {
+                Some((total, remaining, currency)) => (
+                    format_currency(*total, currency),
+                    format_currency(*remaining, currency),
+                ),
+                None => ("N/A".to_string(), "N/A".to_string()),
+            };
+
+            println!(
+                "{:<15} {:<48} {:<94} {:<12} {:<12} {:>20} {:>20}",
+                project.project_id,
+                customer_display,
+                project_name_display,
+                start_date_display,
+                end_date_display,
+                total_contract,
+                remaining_contract
+            );
+        }
+
+        println!("{:-<210}", "");
+        println!();
+    }
+}
+
+pub fn show_main_menu(project_service: &ProjectService, forecast_service: &ForecastService) {
     loop {
         println!();
         println!("╔══════════════════════════════════════════════════════════╗");
@@ -235,6 +415,8 @@ pub fn show_main_menu(project_service: &ProjectService) {
         let options = vec![
             "Show projects with no forecast",
             "Show on-hold projects",
+            "Show forecasts by Project Manager",
+            "Show all projects by Project Manager",
             "Exit",
         ];
 
@@ -255,6 +437,14 @@ pub fn show_main_menu(project_service: &ProjectService) {
                 display_on_hold_projects(project_service);
             }
             2 => {
+                // Show forecasts by Project Manager
+                display_forecasts_by_project_manager(forecast_service);
+            }
+            3 => {
+                // Show all projects by Project Manager
+                display_projects_by_project_manager(project_service);
+            }
+            4 => {
                 // Exit
                 println!();
                 println!("👋 Goodbye!");

@@ -2,6 +2,13 @@ use crate::db::repositories::forecast_repository::ForecastRepositoryTrait;
 use crate::db::repositories::in_memory_repository::InMemoryRepository;
 use crate::db::repositories::project_repository::ProjectRepositoryTrait;
 use crate::models::project::Project;
+use std::collections::HashMap;
+
+#[derive(Clone, Debug)]
+pub struct ProjectByProjectManager {
+    pub project_manager: String,
+    pub projects: Vec<(Project, Option<(f64, f64, String)>)>, // Project and (contract_total_value, contract_remaining_value, currency)
+}
 
 pub struct ProjectService<'a> {
     repository: &'a InMemoryRepository,
@@ -13,6 +20,9 @@ impl<'a> ProjectService<'a> {
     }
 
     /// Finds all projects that do not have a corresponding forecast
+    /// This includes:
+    /// 1. Projects with no forecast entry in ForecastRepository
+    /// 2. Projects with a forecast entry but all month values sum to 0
     pub fn find_projects_without_forecasts(&self) -> Vec<Project> {
         let all_projects = ProjectRepositoryTrait::find_all(self.repository);
         let mut projects_without_forecasts = Vec::new();
@@ -24,8 +34,20 @@ impl<'a> ProjectService<'a> {
                     // No forecast found, add to the list
                     projects_without_forecasts.push(project);
                 }
-                Some(_) => {
-                    // Forecast exists, skip this project
+                Some(forecast) => {
+                    // Forecast exists, check if all month values sum to 0
+                    let total_forecast = forecast.month1_labor_revenue_commit
+                        + forecast.month2_labor_revenue_commit
+                        + forecast.month3_labor_revenue_commit
+                        + forecast.month4_labor_revenue_commit
+                        + forecast.month5_labor_revenue_commit
+                        + forecast.month6_labor_revenue_commit;
+
+                    if total_forecast == 0.0 {
+                        // All month forecasts are 0, add to the list
+                        projects_without_forecasts.push(project);
+                    }
+                    // Otherwise, forecast exists with non-zero values, skip this project
                 }
             }
         }
@@ -66,5 +88,49 @@ impl<'a> ProjectService<'a> {
             .join(" ")
             .trim()
             .to_string()
+    }
+
+    /// Groups projects by project manager
+    /// Returns a vector of ProjectByProjectManager, sorted by project manager name
+    /// For each project, includes optional contract values and currency from the forecast if available
+    pub fn get_projects_by_project_manager(&self) -> Vec<ProjectByProjectManager> {
+        let all_projects = ProjectRepositoryTrait::find_all(self.repository);
+        let mut grouped: HashMap<String, Vec<(Project, Option<(f64, f64, String)>)>> =
+            HashMap::new();
+
+        for project in all_projects {
+            // Extract project manager name (remove account id part)
+            let project_manager_name = Self::extract_project_manager_name(&project.project_manager);
+
+            // Get contract values and currency from forecast if available
+            let contract_values =
+                ForecastRepositoryTrait::find_by_id(self.repository, &project.project_id).map(
+                    |forecast| {
+                        (
+                            forecast.contract_total_value,
+                            forecast.contract_remaining_value,
+                            forecast.currency.clone(),
+                        )
+                    },
+                );
+
+            grouped
+                .entry(project_manager_name.to_string())
+                .or_insert_with(Vec::new)
+                .push((project, contract_values));
+        }
+
+        // Convert to vector and sort by project manager name
+        let mut result: Vec<ProjectByProjectManager> = grouped
+            .into_iter()
+            .map(|(project_manager, projects)| ProjectByProjectManager {
+                project_manager,
+                projects,
+            })
+            .collect();
+
+        result.sort_by(|a, b| a.project_manager.cmp(&b.project_manager));
+
+        result
     }
 }

@@ -1,9 +1,11 @@
+use chrono::NaiveDate;
 use rev_report::db::csv_loader::{load_data_from_csvs, load_forecasts_from_csv, load_projects_from_csv};
 use rev_report::db::repositories::forecast_repository::{ForecastRepository, ForecastRepositoryTrait};
 use rev_report::db::repositories::in_memory_repository::InMemoryRepository;
 use rev_report::db::repositories::project_repository::{ProjectRepository, ProjectRepositoryTrait};
 use rev_report::models::forecast::Forecast;
 use rev_report::models::project::Project;
+use rev_report::services::forecast_service::ForecastService;
 use rev_report::services::project_service::ProjectService;
 use std::fs;
 use std::fs::File;
@@ -33,8 +35,8 @@ fn create_test_forecast(project_id: &str, project_name: &str) -> Forecast {
         project_name: project_name.to_string(),
         project_id: project_id.to_string(),
         class: "Test Class".to_string(),
-        start_date: "2024-01-01".to_string(),
-        finish_date: "2024-12-31".to_string(),
+        start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        finish_date: NaiveDate::from_ymd_opt(2024, 12, 31).unwrap(),
         contract_total_value: 100000.0,
         contract_remaining_value: 75000.0,
         currency: "USD".to_string(),
@@ -678,6 +680,575 @@ fn test_project_service_find_projects_without_forecasts_empty_repository() {
     let projects_without_forecasts = project_service.find_projects_without_forecasts();
     
     assert_eq!(projects_without_forecasts.len(), 0);
+}
+
+#[test]
+fn test_project_service_find_projects_without_forecasts_with_zero_forecast() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let project2 = create_test_project("PROJ-002", "Project 2");
+    let mut forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    // Set all month values to 0
+    forecast1.month1_labor_revenue_commit = 0.0;
+    forecast1.month2_labor_revenue_commit = 0.0;
+    forecast1.month3_labor_revenue_commit = 0.0;
+    forecast1.month4_labor_revenue_commit = 0.0;
+    forecast1.month5_labor_revenue_commit = 0.0;
+    forecast1.month6_labor_revenue_commit = 0.0;
+    // PROJ-002 has no forecast
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    
+    let project_service = ProjectService::new(&repo);
+    let projects_without_forecasts = project_service.find_projects_without_forecasts();
+    
+    // Both projects should be in the list: PROJ-001 has zero forecast, PROJ-002 has no forecast
+    assert_eq!(projects_without_forecasts.len(), 2);
+    let project_ids: Vec<String> = projects_without_forecasts.iter().map(|p| p.project_id.clone()).collect();
+    assert!(project_ids.contains(&"PROJ-001".to_string()));
+    assert!(project_ids.contains(&"PROJ-002".to_string()));
+}
+
+#[test]
+fn test_project_service_find_projects_without_forecasts_with_partial_zero_forecast() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let project2 = create_test_project("PROJ-002", "Project 2");
+    let mut forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    // Set most month values to 0, but one is non-zero
+    forecast1.month1_labor_revenue_commit = 0.0;
+    forecast1.month2_labor_revenue_commit = 0.0;
+    forecast1.month3_labor_revenue_commit = 1000.0; // Non-zero value
+    forecast1.month4_labor_revenue_commit = 0.0;
+    forecast1.month5_labor_revenue_commit = 0.0;
+    forecast1.month6_labor_revenue_commit = 0.0;
+    let forecast2 = create_test_forecast("PROJ-002", "Project 2");
+    // PROJ-002 has a forecast with non-zero values
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    ForecastRepositoryTrait::insert(&repo, forecast2);
+    
+    let project_service = ProjectService::new(&repo);
+    let projects_without_forecasts = project_service.find_projects_without_forecasts();
+    
+    // Neither project should be in the list: both have non-zero forecasts
+    assert_eq!(projects_without_forecasts.len(), 0);
+}
+
+#[test]
+fn test_project_service_find_projects_without_forecasts_mixed_scenarios() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1"); // No forecast
+    let project2 = create_test_project("PROJ-002", "Project 2"); // Zero forecast
+    let project3 = create_test_project("PROJ-003", "Project 3"); // Non-zero forecast
+    let project4 = create_test_project("PROJ-004", "Project 4"); // No forecast
+    let mut forecast2 = create_test_forecast("PROJ-002", "Project 2");
+    // Set all month values to 0
+    forecast2.month1_labor_revenue_commit = 0.0;
+    forecast2.month2_labor_revenue_commit = 0.0;
+    forecast2.month3_labor_revenue_commit = 0.0;
+    forecast2.month4_labor_revenue_commit = 0.0;
+    forecast2.month5_labor_revenue_commit = 0.0;
+    forecast2.month6_labor_revenue_commit = 0.0;
+    let forecast3 = create_test_forecast("PROJ-003", "Project 3");
+    // PROJ-003 has a forecast with non-zero values (from create_test_forecast)
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    ProjectRepositoryTrait::insert(&repo, project4);
+    ForecastRepositoryTrait::insert(&repo, forecast2);
+    ForecastRepositoryTrait::insert(&repo, forecast3);
+    
+    let project_service = ProjectService::new(&repo);
+    let projects_without_forecasts = project_service.find_projects_without_forecasts();
+    
+    // PROJ-001 and PROJ-004 have no forecast, PROJ-002 has zero forecast
+    // PROJ-003 has non-zero forecast, so it should not be in the list
+    assert_eq!(projects_without_forecasts.len(), 3);
+    let project_ids: Vec<String> = projects_without_forecasts.iter().map(|p| p.project_id.clone()).collect();
+    assert!(project_ids.contains(&"PROJ-001".to_string()));
+    assert!(project_ids.contains(&"PROJ-002".to_string()));
+    assert!(project_ids.contains(&"PROJ-004".to_string()));
+    assert!(!project_ids.contains(&"PROJ-003".to_string()));
+}
+
+#[test]
+fn test_project_service_get_projects_by_project_manager_empty_repository() {
+    let repo = InMemoryRepository::new();
+    let project_service = ProjectService::new(&repo);
+    let result = project_service.get_projects_by_project_manager();
+    
+    assert_eq!(result.len(), 0);
+}
+
+#[test]
+fn test_project_service_get_projects_by_project_manager_single_manager() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.project_manager = "Smith, John".to_string();
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.project_manager = "Smith, John".to_string();
+    let forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    let forecast2 = create_test_forecast("PROJ-002", "Project 2");
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    ForecastRepositoryTrait::insert(&repo, forecast2);
+    
+    let project_service = ProjectService::new(&repo);
+    let result = project_service.get_projects_by_project_manager();
+    
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].project_manager, "Smith, John");
+    assert_eq!(result[0].projects.len(), 2);
+    
+    // Check that contract values are included
+    let (_, contract_values1) = &result[0].projects[0];
+    assert!(contract_values1.is_some());
+    let (total1, remaining1, currency1) = contract_values1.as_ref().unwrap();
+    assert_eq!(*total1, 100000.0);
+    assert_eq!(*remaining1, 75000.0);
+    assert_eq!(currency1, "USD");
+}
+
+#[test]
+fn test_project_service_get_projects_by_project_manager_multiple_managers() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.project_manager = "Smith, John".to_string();
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.project_manager = "Doe, Jane".to_string();
+    let mut project3 = create_test_project("PROJ-003", "Project 3");
+    project3.project_manager = "Smith, John".to_string();
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    
+    let project_service = ProjectService::new(&repo);
+    let result = project_service.get_projects_by_project_manager();
+    
+    // Should be sorted alphabetically: "Doe, Jane" comes before "Smith, John"
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].project_manager, "Doe, Jane");
+    assert_eq!(result[0].projects.len(), 1);
+    assert_eq!(result[1].project_manager, "Smith, John");
+    assert_eq!(result[1].projects.len(), 2);
+}
+
+#[test]
+fn test_project_service_get_projects_by_project_manager_extracts_manager_name() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.project_manager = "Smith, John{jsmith@example.com}".to_string();
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.project_manager = "Smith, John{jsmith@example.com}".to_string();
+    let mut project3 = create_test_project("PROJ-003", "Project 3");
+    project3.project_manager = "Doe, Jane{jdoe@example.com}".to_string();
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    
+    let project_service = ProjectService::new(&repo);
+    let result = project_service.get_projects_by_project_manager();
+    
+    // Should extract just the name part (before the '{')
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].project_manager, "Doe, Jane");
+    assert_eq!(result[1].project_manager, "Smith, John");
+}
+
+#[test]
+fn test_project_service_get_projects_by_project_manager_without_forecasts() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.project_manager = "Smith, John".to_string();
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.project_manager = "Smith, John".to_string();
+    let forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    // PROJ-002 has no forecast
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    
+    let project_service = ProjectService::new(&repo);
+    let result = project_service.get_projects_by_project_manager();
+    
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].projects.len(), 2);
+    
+    // Find projects by ID (order is not guaranteed with HashMap)
+    let (proj1_item, contract_values1) = result[0]
+        .projects
+        .iter()
+        .find(|(p, _)| p.project_id == "PROJ-001")
+        .unwrap();
+    assert_eq!(proj1_item.project_id, "PROJ-001");
+    assert!(contract_values1.is_some());
+    
+    let (proj2_item, contract_values2) = result[0]
+        .projects
+        .iter()
+        .find(|(p, _)| p.project_id == "PROJ-002")
+        .unwrap();
+    assert_eq!(proj2_item.project_id, "PROJ-002");
+    assert!(contract_values2.is_none());
+}
+
+#[test]
+fn test_project_service_get_projects_by_project_manager_with_different_currencies() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.project_manager = "Smith, John".to_string();
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.project_manager = "Smith, John".to_string();
+    let mut forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    forecast1.currency = "EUR".to_string();
+    forecast1.contract_total_value = 50000.0;
+    forecast1.contract_remaining_value = 37500.0;
+    let mut forecast2 = create_test_forecast("PROJ-002", "Project 2");
+    forecast2.currency = "GBP".to_string();
+    forecast2.contract_total_value = 75000.0;
+    forecast2.contract_remaining_value = 56250.0;
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    ForecastRepositoryTrait::insert(&repo, forecast2);
+    
+    let project_service = ProjectService::new(&repo);
+    let result = project_service.get_projects_by_project_manager();
+    
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].projects.len(), 2);
+    
+    // Find projects by ID (order is not guaranteed with HashMap)
+    let (proj1_item, contract_values1) = result[0]
+        .projects
+        .iter()
+        .find(|(p, _)| p.project_id == "PROJ-001")
+        .unwrap();
+    assert_eq!(proj1_item.project_id, "PROJ-001");
+    let (total1, remaining1, currency1) = contract_values1.as_ref().unwrap();
+    assert_eq!(*total1, 50000.0);
+    assert_eq!(*remaining1, 37500.0);
+    assert_eq!(currency1, "EUR");
+    
+    let (proj2_item, contract_values2) = result[0]
+        .projects
+        .iter()
+        .find(|(p, _)| p.project_id == "PROJ-002")
+        .unwrap();
+    assert_eq!(proj2_item.project_id, "PROJ-002");
+    let (total2, remaining2, currency2) = contract_values2.as_ref().unwrap();
+    assert_eq!(*total2, 75000.0);
+    assert_eq!(*remaining2, 56250.0);
+    assert_eq!(currency2, "GBP");
+}
+
+#[test]
+fn test_project_service_get_projects_by_project_manager_sorted_alphabetically() {
+    let repo = InMemoryRepository::new();
+    let mut project1 = create_test_project("PROJ-001", "Project 1");
+    project1.project_manager = "Zebra, Alice".to_string();
+    let mut project2 = create_test_project("PROJ-002", "Project 2");
+    project2.project_manager = "Apple, Bob".to_string();
+    let mut project3 = create_test_project("PROJ-003", "Project 3");
+    project3.project_manager = "Miller, Charlie".to_string();
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    
+    let project_service = ProjectService::new(&repo);
+    let result = project_service.get_projects_by_project_manager();
+    
+    // Should be sorted alphabetically
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[0].project_manager, "Apple, Bob");
+    assert_eq!(result[1].project_manager, "Miller, Charlie");
+    assert_eq!(result[2].project_manager, "Zebra, Alice");
+}
+
+// ========== ForecastService Tests ==========
+
+#[test]
+fn test_forecast_service_get_forecasts_by_project_manager_empty_repository() {
+    let repo = InMemoryRepository::new();
+    let forecast_service = ForecastService::new(&repo);
+    let result = forecast_service.get_forecasts_by_project_manager();
+    
+    assert_eq!(result.len(), 0);
+}
+
+#[test]
+fn test_forecast_service_get_forecasts_by_project_manager_single_manager() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let project2 = create_test_project("PROJ-002", "Project 2");
+    let mut forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    forecast1.project_manager = "Smith, John".to_string();
+    let mut forecast2 = create_test_forecast("PROJ-002", "Project 2");
+    forecast2.project_manager = "Smith, John".to_string();
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    ForecastRepositoryTrait::insert(&repo, forecast2);
+    
+    let forecast_service = ForecastService::new(&repo);
+    let result = forecast_service.get_forecasts_by_project_manager();
+    
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].project_manager, "Smith, John");
+    assert_eq!(result[0].forecasts.len(), 2);
+}
+
+#[test]
+fn test_forecast_service_get_forecasts_by_project_manager_multiple_managers() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let project2 = create_test_project("PROJ-002", "Project 2");
+    let project3 = create_test_project("PROJ-003", "Project 3");
+    let mut forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    forecast1.project_manager = "Smith, John".to_string();
+    let mut forecast2 = create_test_forecast("PROJ-002", "Project 2");
+    forecast2.project_manager = "Doe, Jane".to_string();
+    let mut forecast3 = create_test_forecast("PROJ-003", "Project 3");
+    forecast3.project_manager = "Smith, John".to_string();
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    ForecastRepositoryTrait::insert(&repo, forecast2);
+    ForecastRepositoryTrait::insert(&repo, forecast3);
+    
+    let forecast_service = ForecastService::new(&repo);
+    let result = forecast_service.get_forecasts_by_project_manager();
+    
+    assert_eq!(result.len(), 2);
+    // Should be sorted alphabetically
+    assert_eq!(result[0].project_manager, "Doe, Jane");
+    assert_eq!(result[0].forecasts.len(), 1);
+    assert_eq!(result[1].project_manager, "Smith, John");
+    assert_eq!(result[1].forecasts.len(), 2);
+}
+
+#[test]
+fn test_forecast_service_get_forecasts_by_project_manager_with_account_id() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let mut forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    forecast1.project_manager = "Smith, John{js055528@broadcom.net}".to_string();
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    
+    let forecast_service = ForecastService::new(&repo);
+    let result = forecast_service.get_forecasts_by_project_manager();
+    
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].project_manager, "Smith, John");
+    assert_eq!(result[0].forecasts.len(), 1);
+}
+
+#[test]
+fn test_forecast_service_get_forecasts_by_project_manager_without_project() {
+    let repo = InMemoryRepository::new();
+    let mut forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    forecast1.project_manager = "Smith, John".to_string();
+    
+    // Don't insert the project, so customer name should be None
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    
+    let forecast_service = ForecastService::new(&repo);
+    let result = forecast_service.get_forecasts_by_project_manager();
+    
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].project_manager, "Smith, John");
+    assert_eq!(result[0].forecasts.len(), 1);
+    // Customer name should be None since project doesn't exist
+    assert!(result[0].forecasts[0].1.is_none());
+}
+
+#[test]
+fn test_forecast_service_get_forecasts_by_project_manager_with_customer_name() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let mut forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    forecast1.project_manager = "Smith, John".to_string();
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    
+    let forecast_service = ForecastService::new(&repo);
+    let result = forecast_service.get_forecasts_by_project_manager();
+    
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].forecasts.len(), 1);
+    // Customer name should be Some since project exists
+    assert!(result[0].forecasts[0].1.is_some());
+    assert_eq!(result[0].forecasts[0].1.as_ref().unwrap(), "Test Customer");
+}
+
+#[test]
+fn test_forecast_service_get_forecasts_by_project_manager_sorting() {
+    let repo = InMemoryRepository::new();
+    let project1 = create_test_project("PROJ-001", "Project 1");
+    let project2 = create_test_project("PROJ-002", "Project 2");
+    let project3 = create_test_project("PROJ-003", "Project 3");
+    let mut forecast1 = create_test_forecast("PROJ-001", "Project 1");
+    forecast1.project_manager = "Zebra, Zoe".to_string();
+    let mut forecast2 = create_test_forecast("PROJ-002", "Project 2");
+    forecast2.project_manager = "Apple, Adam".to_string();
+    let mut forecast3 = create_test_forecast("PROJ-003", "Project 3");
+    forecast3.project_manager = "Baker, Bob".to_string();
+    
+    ProjectRepositoryTrait::insert(&repo, project1);
+    ProjectRepositoryTrait::insert(&repo, project2);
+    ProjectRepositoryTrait::insert(&repo, project3);
+    ForecastRepositoryTrait::insert(&repo, forecast1);
+    ForecastRepositoryTrait::insert(&repo, forecast2);
+    ForecastRepositoryTrait::insert(&repo, forecast3);
+    
+    let forecast_service = ForecastService::new(&repo);
+    let result = forecast_service.get_forecasts_by_project_manager();
+    
+    assert_eq!(result.len(), 3);
+    // Should be sorted alphabetically
+    assert_eq!(result[0].project_manager, "Apple, Adam");
+    assert_eq!(result[1].project_manager, "Baker, Bob");
+    assert_eq!(result[2].project_manager, "Zebra, Zoe");
+}
+
+// ========== Currency Formatting Tests ==========
+
+#[test]
+fn test_format_currency_usd_positive() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234.56, "USD");
+    assert_eq!(result, "$1,234.56");
+}
+
+#[test]
+fn test_format_currency_usd_negative() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(-1234.56, "USD");
+    assert_eq!(result, "-$1,234.56");
+}
+
+#[test]
+fn test_format_currency_usd_large_number() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234567.89, "USD");
+    assert_eq!(result, "$1,234,567.89");
+}
+
+#[test]
+fn test_format_currency_usd_small_number() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(100.00, "USD");
+    assert_eq!(result, "$100.00");
+}
+
+#[test]
+fn test_format_currency_usd_zero() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(0.0, "USD");
+    assert_eq!(result, "$0.00");
+}
+
+#[test]
+fn test_format_currency_aud() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234.56, "AUD");
+    assert_eq!(result, "A$1,234.56");
+}
+
+#[test]
+fn test_format_currency_aud_lowercase() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234.56, "aud");
+    assert_eq!(result, "A$1,234.56");
+}
+
+#[test]
+fn test_format_currency_eur() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234.56, "EUR");
+    assert_eq!(result, "€1,234.56");
+}
+
+#[test]
+fn test_format_currency_gbp() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234.56, "GBP");
+    assert_eq!(result, "£1,234.56");
+}
+
+#[test]
+fn test_format_currency_cad() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234.56, "CAD");
+    assert_eq!(result, "C$1,234.56");
+}
+
+#[test]
+fn test_format_currency_unknown_currency() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234.56, "XYZ");
+    assert_eq!(result, "1,234.56");
+}
+
+#[test]
+fn test_format_currency_one_decimal_place() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234.5, "USD");
+    assert_eq!(result, "$1,234.50");
+}
+
+#[test]
+fn test_format_currency_no_decimal_place() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234.0, "USD");
+    assert_eq!(result, "$1,234.00");
+}
+
+#[test]
+fn test_format_currency_fractional_cents() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234.567, "USD");
+    assert_eq!(result, "$1,234.57"); // Rounded to 2 decimal places
+}
+
+#[test]
+fn test_format_currency_very_large_number() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(1234567890.12, "USD");
+    assert_eq!(result, "$1,234,567,890.12");
+}
+
+#[test]
+fn test_format_currency_single_digit() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(9.99, "USD");
+    assert_eq!(result, "$9.99");
+}
+
+#[test]
+fn test_format_currency_less_than_one() {
+    use rev_report::utils::utils::format_currency;
+    let result = format_currency(0.99, "USD");
+    assert_eq!(result, "$0.99");
 }
 
 // Helper function to create a temporary projects CSV file

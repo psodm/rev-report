@@ -3,6 +3,7 @@ use crate::db::repositories::in_memory_repository::InMemoryRepository;
 use crate::db::repositories::project_repository::ProjectRepositoryTrait;
 use crate::models::forecast::Forecast;
 use crate::models::project::Project;
+use chrono::NaiveDate;
 use csv::ReaderBuilder;
 use std::error::Error;
 use std::fs::File;
@@ -83,8 +84,18 @@ pub fn load_forecasts_from_csv(
         let project_name = record.get(2).unwrap_or("").to_string();
         let project_id = record.get(3).unwrap_or("").to_string();
         let class = record.get(4).unwrap_or("").to_string();
-        let start_date = record.get(5).unwrap_or("").to_string();
-        let finish_date = record.get(6).unwrap_or("").to_string();
+        let start_date_str = record.get(5).unwrap_or("").to_string();
+        let finish_date_str = record.get(6).unwrap_or("").to_string();
+
+        // Parse dates from dd/mm/yyyy format
+        let start_date = parse_date_from_dd_mm_yyyy(&start_date_str).unwrap_or_else(|| {
+            // Default to epoch if parsing fails
+            NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
+        });
+        let finish_date = parse_date_from_dd_mm_yyyy(&finish_date_str).unwrap_or_else(|| {
+            // Default to epoch if parsing fails
+            NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
+        });
 
         // Parse numeric fields
         let contract_total_value = record.get(7).unwrap_or("0").parse::<f64>().unwrap_or(0.0);
@@ -152,6 +163,24 @@ pub fn load_forecasts_from_csv(
     }
 
     Ok(count)
+}
+
+/// Parses a date string in dd/mm/yyyy format to NaiveDate
+fn parse_date_from_dd_mm_yyyy(date_str: &str) -> Option<NaiveDate> {
+    if date_str.is_empty() {
+        return None;
+    }
+
+    let parts: Vec<&str> = date_str.split('/').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+
+    let day = parts[0].parse::<u32>().ok()?;
+    let month = parts[1].parse::<u32>().ok()?;
+    let year = parts[2].parse::<i32>().ok()?;
+
+    NaiveDate::from_ymd_opt(year, month, day)
 }
 
 /// Loads both projects and forecasts from CSV files into the repository
