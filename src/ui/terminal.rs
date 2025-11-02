@@ -385,6 +385,108 @@ fn display_projects_without_account_executive(project_service: &ProjectService) 
     }
 }
 
+fn display_on_hold_projects_by_account_executive(project_service: &ProjectService) {
+    let span = tracing::info_span!("display_on_hold_projects_by_account_executive");
+    let _guard = span.enter();
+    use crate::db::repositories::forecast_repository::ForecastRepositoryTrait;
+
+    let grouped = project_service.get_on_hold_projects_by_account_executive();
+
+    println!();
+    println!("╔══════════════════════════════════════════════════════════╗");
+    println!("║        On-Hold Projects by Account Executive             ║");
+    println!("╚══════════════════════════════════════════════════════════╝");
+    println!();
+
+    if grouped.is_empty() {
+        info!("No on-hold projects found");
+        println!("✅ No on-hold projects found.");
+        println!();
+        return;
+    }
+
+    // Convert to vector and sort by Account Executive name
+    let mut ae_groups: Vec<(String, Vec<Project>)> = grouped.into_iter().collect();
+    ae_groups.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let total_count: usize = ae_groups.iter().map(|(_, projects)| projects.len()).sum();
+    info!(total_count = total_count, ae_count = ae_groups.len(), "Found on-hold projects grouped by Account Executive");
+    println!("Found {} on-hold project(s) across {} Account Executive(s):\n", total_count, ae_groups.len());
+
+    for (account_executive, mut projects) in ae_groups {
+        println!("═══════════════════════════════════════════════════════════");
+        println!("Account Executive: {}", account_executive);
+        println!("═══════════════════════════════════════════════════════════");
+        println!();
+
+        // Sort projects by class before displaying
+        projects.sort_by(|a, b| {
+            let class_a = ForecastRepositoryTrait::find_by_id(
+                project_service.repository,
+                &a.project_id,
+            )
+            .map(|f| f.class.clone())
+            .unwrap_or_else(|| String::new());
+
+            let class_b = ForecastRepositoryTrait::find_by_id(
+                project_service.repository,
+                &b.project_id,
+            )
+            .map(|f| f.class.clone())
+            .unwrap_or_else(|| String::new());
+
+            class_a.cmp(&class_b)
+        });
+
+        println!("{:-<331}", "");
+        println!(
+            "{:<15} {:<48} {:<98} {:<32} {:<10} {:<128}",
+            "Project ID", "Customer", "Project Name", "Project Manager", "Class", "On Hold Comment"
+        );
+        println!("{:-<331}", "");
+
+        for project in projects {
+            // Truncate customer name to max 44 characters
+            let customer_name = truncate_string(&project.end_customer_name, 44);
+
+            // Truncate project name to max 94 characters
+            let project_name = truncate_string(&project.project_name, 94);
+
+            // Extract just the name from project manager (remove account id part)
+            let project_manager_full_name =
+                ProjectService::extract_project_manager_name(&project.project_manager);
+            // Truncate project manager name to max 32 characters
+            let project_manager_name = truncate_string(project_manager_full_name, 32);
+
+            // Get class from forecast if available
+            let class_display = ForecastRepositoryTrait::find_by_id(
+                project_service.repository,
+                &project.project_id,
+            )
+            .map(|f| f.class.clone())
+            .unwrap_or_else(|| "N/A".to_string());
+
+            // Get on-hold comment or empty string, sanitize newlines, then truncate to max 128 characters
+            let on_hold_comment = project.on_hold_comment.as_deref().unwrap_or("");
+            let sanitized_comment = ProjectService::sanitize_on_hold_comment(on_hold_comment);
+            let comment_display = truncate_string(&sanitized_comment, 128);
+
+            println!(
+                "{:<15} {:<48} {:<98} {:<32} {:<10} {:<128}",
+                project.project_id,
+                customer_name,
+                project_name,
+                project_manager_name,
+                class_display,
+                comment_display
+            );
+        }
+
+        println!("{:-<331}", "");
+        println!();
+    }
+}
+
 fn display_all_account_executives(project_service: &ProjectService) {
     let span = tracing::info_span!("display_all_account_executives");
     let _guard = span.enter();
@@ -639,6 +741,7 @@ pub fn show_main_menu(project_service: &ProjectService, forecast_service: &Forec
         let options = vec![
             "Show projects with no forecast",
             "Show on-hold projects",
+            "Show on-hold projects by Account Executive",
             "Show projects without Account Executive",
             "Show all Account Executives",
             "Show forecasts by Project Manager",
@@ -664,26 +767,31 @@ pub fn show_main_menu(project_service: &ProjectService, forecast_service: &Forec
                 display_on_hold_projects(project_service);
             }
             Ok(2) => {
+                // Show on-hold projects by Account Executive
+                info!("User selected: Show on-hold projects by Account Executive");
+                display_on_hold_projects_by_account_executive(project_service);
+            }
+            Ok(3) => {
                 // Show projects without Account Executive
                 info!("User selected: Show projects without Account Executive");
                 display_projects_without_account_executive(project_service);
             }
-            Ok(3) => {
+            Ok(4) => {
                 // Show all Account Executives
                 info!("User selected: Show all Account Executives");
                 display_all_account_executives(project_service);
             }
-            Ok(4) => {
+            Ok(5) => {
                 // Show forecasts by Project Manager
                 info!("User selected: Show forecasts by Project Manager");
                 display_forecasts_by_project_manager(forecast_service);
             }
-            Ok(5) => {
+            Ok(6) => {
                 // Show all projects by Project Manager
                 info!("User selected: Show all projects by Project Manager");
                 display_projects_by_project_manager(project_service);
             }
-            Ok(6) => {
+            Ok(7) => {
                 // Exit
                 info!("User selected: Exit - terminating application");
                 println!();

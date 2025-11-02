@@ -216,4 +216,35 @@ impl<'a> ProjectService<'a> {
         );
         result
     }
+
+    /// Groups on-hold projects by Account Executive
+    /// Returns a HashMap where the key is the Account Executive name (or "No Account Executive" for projects without one)
+    /// and the value is a vector of on-hold projects for that Account Executive
+    pub fn get_on_hold_projects_by_account_executive(&self) -> HashMap<String, Vec<Project>> {
+        let span = tracing::info_span!("get_on_hold_projects_by_account_executive");
+        let _guard = span.enter();
+        info!("Grouping on-hold projects by Account Executive");
+        
+        let on_hold_projects = self.find_on_hold_projects();
+        let mut grouped: HashMap<String, Vec<Project>> = HashMap::new();
+
+        trace!(total_on_hold = on_hold_projects.len(), "Grouping on-hold projects by Account Executive");
+        
+        for project in on_hold_projects {
+            let account_executive = match &project.account_executive {
+                Some(ae) if !ae.trim().is_empty() => ae.trim().to_string(),
+                _ => "No Account Executive".to_string(),
+            };
+            
+            grouped
+                .entry(account_executive)
+                .or_insert_with(Vec::new)
+                .push(project);
+        }
+
+        debug!(ae_count = grouped.len(), "Grouped on-hold projects by Account Executive");
+        info!(ae_count = grouped.len(), "Retrieved on-hold projects grouped by Account Executive");
+        
+        grouped
+    }
 }
