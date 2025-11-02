@@ -303,7 +303,7 @@ fn display_projects_without_account_executive(project_service: &ProjectService) 
 
     println!();
     println!("╔══════════════════════════════════════════════════════════╗");
-    println!("║        Projects without Account Executive                ║");
+    println!("║       Projects without Account Executive Listed          ║");
     println!("╚══════════════════════════════════════════════════════════╝");
     println!();
 
@@ -410,8 +410,16 @@ fn display_on_hold_projects_by_account_executive(project_service: &ProjectServic
     ae_groups.sort_by(|a, b| a.0.cmp(&b.0));
 
     let total_count: usize = ae_groups.iter().map(|(_, projects)| projects.len()).sum();
-    info!(total_count = total_count, ae_count = ae_groups.len(), "Found on-hold projects grouped by Account Executive");
-    println!("Found {} on-hold project(s) across {} Account Executive(s):\n", total_count, ae_groups.len());
+    info!(
+        total_count = total_count,
+        ae_count = ae_groups.len(),
+        "Found on-hold projects grouped by Account Executive"
+    );
+    println!(
+        "Found {} on-hold project(s) across {} Account Executive(s):\n",
+        total_count,
+        ae_groups.len()
+    );
 
     for (account_executive, mut projects) in ae_groups {
         println!("═══════════════════════════════════════════════════════════");
@@ -421,19 +429,15 @@ fn display_on_hold_projects_by_account_executive(project_service: &ProjectServic
 
         // Sort projects by class before displaying
         projects.sort_by(|a, b| {
-            let class_a = ForecastRepositoryTrait::find_by_id(
-                project_service.repository,
-                &a.project_id,
-            )
-            .map(|f| f.class.clone())
-            .unwrap_or_else(|| String::new());
+            let class_a =
+                ForecastRepositoryTrait::find_by_id(project_service.repository, &a.project_id)
+                    .map(|f| f.class.clone())
+                    .unwrap_or_else(|| String::new());
 
-            let class_b = ForecastRepositoryTrait::find_by_id(
-                project_service.repository,
-                &b.project_id,
-            )
-            .map(|f| f.class.clone())
-            .unwrap_or_else(|| String::new());
+            let class_b =
+                ForecastRepositoryTrait::find_by_id(project_service.repository, &b.project_id)
+                    .map(|f| f.class.clone())
+                    .unwrap_or_else(|| String::new());
 
             class_a.cmp(&class_b)
         });
