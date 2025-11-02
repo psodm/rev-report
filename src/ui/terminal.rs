@@ -730,6 +730,65 @@ fn display_projects_by_project_manager(project_service: &ProjectService) {
     }
 }
 
+fn display_revenue_summary_by_account_executive(forecast_service: &ForecastService) {
+    let span = tracing::info_span!("display_revenue_summary_by_account_executive");
+    let _guard = span.enter();
+
+    let summaries = forecast_service.get_revenue_summary_by_account_executive();
+
+    println!();
+    println!("╔══════════════════════════════════════════════════════════╗");
+    println!("║        Revenue Summary by Account Executive              ║");
+    println!("╚══════════════════════════════════════════════════════════╝");
+    println!();
+
+    if summaries.is_empty() {
+        info!("No revenue summaries found");
+        println!("✅ No revenue summaries found.");
+        println!();
+        return;
+    }
+
+    let total_count = summaries.len();
+    info!(
+        ae_count = total_count,
+        "Displaying revenue summaries by Account Executive"
+    );
+    println!("Found {} Account Executive(s):\n", total_count);
+
+    // Get a representative currency for formatting (use USD as default)
+    // We'll use the currency from the first forecast we find, or default to USD
+    let default_currency = "USD";
+
+    println!("{:-<154}", "");
+    println!(
+        "{:<40} {:>18} {:>18} {:>18} {:>18} {:>18} {:>18}",
+        "Account Executive", "Month 1", "Month 2", "Month 3", "Month 4", "Month 5", "Month 6"
+    );
+    println!("{:-<154}", "");
+
+    for summary in summaries {
+        println!(
+            "{:<40} {:>18} {:>18} {:>18} {:>18} {:>18} {:>18}",
+            truncate_string(&summary.account_executive, 38),
+            format_currency(summary.month1_total, default_currency),
+            format_currency(summary.month2_total, default_currency),
+            format_currency(summary.month3_total, default_currency),
+            format_currency(summary.month4_total, default_currency),
+            format_currency(summary.month5_total, default_currency),
+            format_currency(summary.month6_total, default_currency),
+        );
+    }
+
+    println!("{:-<154}", "");
+    println!();
+
+    debug!(
+        ae_count = total_count,
+        "Displayed revenue summaries by Account Executive"
+    );
+}
+
 pub fn show_main_menu(project_service: &ProjectService, forecast_service: &ForecastService) {
     let span = tracing::info_span!("main_menu");
     let _guard = span.enter();
@@ -750,6 +809,7 @@ pub fn show_main_menu(project_service: &ProjectService, forecast_service: &Forec
             "Show all Account Executives",
             "Show forecasts by Project Manager",
             "Show all projects by Project Manager",
+            "Show revenue summary for Account Executive",
             "Exit",
         ];
 
@@ -796,6 +856,11 @@ pub fn show_main_menu(project_service: &ProjectService, forecast_service: &Forec
                 display_projects_by_project_manager(project_service);
             }
             Ok(7) => {
+                // Show revenue summary for Account Executive
+                info!("User selected: Show revenue summary for Account Executive");
+                display_revenue_summary_by_account_executive(forecast_service);
+            }
+            Ok(8) => {
                 // Exit
                 info!("User selected: Exit - terminating application");
                 println!();

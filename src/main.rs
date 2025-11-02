@@ -18,7 +18,7 @@ struct Args {
         short = 'l',
         long = "logging",
         value_name = "LEVEL",
-        default_value = "error"
+        default_value = "trace"
     )]
     log_level: LogLevel,
 }
