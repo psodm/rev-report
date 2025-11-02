@@ -1,5 +1,6 @@
 use crate::db::repositories::forecast_repository::{ForecastRepository, ForecastRepositoryTrait};
 use crate::db::repositories::project_repository::{ProjectRepository, ProjectRepositoryTrait};
+use tracing::info;
 
 pub struct InMemoryRepository {
     project_repository: ProjectRepository,
@@ -8,6 +9,7 @@ pub struct InMemoryRepository {
 
 impl InMemoryRepository {
     pub fn new() -> Self {
+        info!("Creating new InMemoryRepository");
         Self {
             project_repository: ProjectRepository::new(),
             forecast_repository: ForecastRepository::new(),

@@ -7,6 +7,7 @@ use crate::services::project_service::ProjectService;
 use crate::utils::utils::format_currency;
 use dialoguer::{Input, Select};
 use std::path::Path;
+use tracing::{debug, error, info, trace, warn};
 
 /// Safely truncates a string to a maximum number of characters (not bytes)
 /// This handles multi-byte UTF-8 characters correctly
@@ -22,8 +23,10 @@ fn truncate_string(s: &str, max_chars: usize) -> &str {
 }
 
 fn validate_csv_file_path(file_path: &str) -> Result<(), String> {
+    trace!(file_path = %file_path, "Validating CSV file path");
     // Check if file exists
     if !Path::new(file_path).exists() {
+        warn!(file_path = %file_path, "CSV file does not exist");
         return Err(format!(
             "File '{}' does not exist. Please provide a valid file path.",
             file_path
@@ -32,12 +35,14 @@ fn validate_csv_file_path(file_path: &str) -> Result<(), String> {
 
     // Check if file has .csv extension
     if !file_path.to_lowercase().ends_with(".csv") {
+        warn!(file_path = %file_path, "File does not have .csv extension");
         return Err(format!(
             "File '{}' is not a CSV file. Please provide a file with .csv extension.",
             file_path
         ));
     }
 
+    debug!(file_path = %file_path, "CSV file path validated successfully");
     Ok(())
 }
 
@@ -67,6 +72,10 @@ fn prompt_for_csv_file(prompt_message: &str) -> String {
 }
 
 pub fn run_terminal_ui() -> Result<InMemoryRepository, Box<dyn std::error::Error>> {
+    let span = tracing::info_span!("terminal_ui", operation = "run_terminal_ui");
+    let _guard = span.enter();
+
+    info!("Starting terminal UI");
     println!("╔══════════════════════════════════════════════════════════╗");
     println!("║          Revenue Report CSV Data Loader                  ║");
     println!("╚══════════════════════════════════════════════════════════╝");
@@ -74,22 +83,32 @@ pub fn run_terminal_ui() -> Result<InMemoryRepository, Box<dyn std::error::Error
 
     // Prompt for projects CSV file
     let projects_path = prompt_for_csv_file("Enter the path to the projects CSV file");
+    info!(projects_path = %projects_path, "Projects CSV file path obtained from user");
     println!();
 
     // Prompt for forecasts CSV file
     let forecasts_path = prompt_for_csv_file("Enter the path to the forecasts CSV file");
+    info!(forecasts_path = %forecasts_path, "Forecasts CSV file path obtained from user");
     println!();
 
     // Create repository
     println!("📦 Creating in-memory repository...");
     let repo = InMemoryRepository::new();
+    info!("Repository created successfully");
     println!("✅ Repository created successfully.");
     println!();
 
     // Load CSV files
     println!("📥 Loading CSV files into repository...");
+    let load_span = tracing::info_span!("load_csv_data", projects_file = %projects_path, forecasts_file = %forecasts_path);
+    let _load_guard = load_span.enter();
     match load_data_from_csvs(&repo, &projects_path, &forecasts_path) {
         Ok((project_count, forecast_count)) => {
+            info!(
+                project_count = project_count,
+                forecast_count = forecast_count,
+                "Successfully loaded CSV data"
+            );
             println!("✅ Successfully loaded data:");
             println!(
                 "   • {} projects loaded from '{}'",
@@ -105,6 +124,10 @@ pub fn run_terminal_ui() -> Result<InMemoryRepository, Box<dyn std::error::Error
 
             // Remove project S00000072027 if it exists (this project never has a forecast)
             if ProjectRepositoryTrait::delete_by_id(&repo, "S00000072027") {
+                info!(
+                    project_id = "S00000072027",
+                    "Removed project that never has a forecast"
+                );
                 println!("ℹ️  Removed project S00000072027 (project never has a forecast)");
                 println!();
             }
@@ -112,6 +135,7 @@ pub fn run_terminal_ui() -> Result<InMemoryRepository, Box<dyn std::error::Error
             // Create services
             let project_service = ProjectService::new(&repo);
             let forecast_service = ForecastService::new(&repo);
+            debug!("Services created successfully");
 
             // Show main menu
             show_main_menu(&project_service, &forecast_service);
@@ -119,6 +143,12 @@ pub fn run_terminal_ui() -> Result<InMemoryRepository, Box<dyn std::error::Error
             Ok(repo)
         }
         Err(e) => {
+            error!(
+                error = %e,
+                projects_path = %projects_path,
+                forecasts_path = %forecasts_path,
+                "Failed to load CSV files"
+            );
             println!();
             println!("❌ Error loading CSV files:");
             println!("   {}", e);
@@ -134,6 +164,8 @@ pub fn run_terminal_ui() -> Result<InMemoryRepository, Box<dyn std::error::Error
 }
 
 fn display_projects_without_forecasts(project_service: &ProjectService) {
+    let span = tracing::info_span!("display_projects_without_forecasts");
+    let _guard = span.enter();
     let projects = project_service.find_projects_without_forecasts();
 
     println!();
@@ -143,8 +175,10 @@ fn display_projects_without_forecasts(project_service: &ProjectService) {
     println!();
 
     if projects.is_empty() {
+        info!("No projects without forecast found");
         println!("✅ All projects have forecasts. No projects found without forecasts.");
     } else {
+        info!(count = projects.len(), "Found projects without forecasts");
         println!("Found {} project(s) without forecasts:\n", projects.len());
         println!("{:-<193}", "");
         println!(
@@ -176,6 +210,8 @@ fn display_projects_without_forecasts(project_service: &ProjectService) {
 }
 
 fn display_on_hold_projects(project_service: &ProjectService) {
+    let span = tracing::info_span!("display_on_hold_projects");
+    let _guard = span.enter();
     use crate::db::repositories::forecast_repository::ForecastRepositoryTrait;
 
     let mut projects = project_service.find_on_hold_projects();
@@ -186,9 +222,13 @@ fn display_on_hold_projects(project_service: &ProjectService) {
     println!("╚══════════════════════════════════════════════════════════╝");
     println!();
 
+    debug!(count = projects.len(), "Displaying on-hold projects");
+
     if projects.is_empty() {
+        info!("No on-hold projects found");
         println!("✅ No projects are currently on hold.");
     } else {
+        info!(count = projects.len(), "Found on-hold projects");
         // Sort projects by class before displaying
         projects.sort_by(|a, b| {
             let class_a =
@@ -255,6 +295,8 @@ fn display_on_hold_projects(project_service: &ProjectService) {
 }
 
 fn display_projects_without_account_executive(project_service: &ProjectService) {
+    let span = tracing::info_span!("display_projects_without_account_executive");
+    let _guard = span.enter();
     use std::collections::HashMap;
 
     let projects = project_service.find_projects_without_account_executive();
@@ -265,11 +307,22 @@ fn display_projects_without_account_executive(project_service: &ProjectService) 
     println!("╚══════════════════════════════════════════════════════════╝");
     println!();
 
+    debug!(
+        count = projects.len(),
+        "Displaying projects without Account Executive"
+    );
+
     if projects.is_empty() {
+        info!("No projects without Account Executive found");
         println!("✅ No projects without Account Executive found.");
         println!();
         return;
     }
+
+    info!(
+        count = projects.len(),
+        "Found projects without Account Executive"
+    );
 
     // Group projects by Project Manager
     let mut grouped: HashMap<String, Vec<Project>> = HashMap::new();
@@ -333,6 +386,8 @@ fn display_projects_without_account_executive(project_service: &ProjectService) 
 }
 
 fn display_all_account_executives(project_service: &ProjectService) {
+    let span = tracing::info_span!("display_all_account_executives");
+    let _guard = span.enter();
     let account_executives = project_service.find_all_account_executives();
 
     println!();
@@ -341,12 +396,19 @@ fn display_all_account_executives(project_service: &ProjectService) {
     println!("╚══════════════════════════════════════════════════════════╝");
     println!();
 
+    debug!(
+        count = account_executives.len(),
+        "Displaying Account Executives"
+    );
+
     if account_executives.is_empty() {
+        info!("No Account Executives found");
         println!("✅ No Account Executives found.");
         println!();
         return;
     }
 
+    info!(count = account_executives.len(), "Found Account Executives");
     println!("Found {} Account Executive(s):\n", account_executives.len());
 
     for (index, ae) in account_executives.iter().enumerate() {
@@ -357,7 +419,14 @@ fn display_all_account_executives(project_service: &ProjectService) {
 }
 
 fn display_forecasts_by_project_manager(forecast_service: &ForecastService) {
+    let span = tracing::info_span!("display_forecasts_by_project_manager");
+    let _guard = span.enter();
     let forecasts_by_manager = forecast_service.get_forecasts_by_project_manager();
+
+    debug!(
+        manager_count = forecasts_by_manager.len(),
+        "Displaying forecasts by Project Manager"
+    );
 
     println!();
     println!("╔══════════════════════════════════════════════════════════╗");
@@ -366,10 +435,16 @@ fn display_forecasts_by_project_manager(forecast_service: &ForecastService) {
     println!();
 
     if forecasts_by_manager.is_empty() {
+        info!("No forecasts found");
         println!("✅ No forecasts found.");
         println!();
         return;
     }
+
+    info!(
+        manager_count = forecasts_by_manager.len(),
+        "Found forecasts grouped by Project Manager"
+    );
 
     for manager_group in forecasts_by_manager {
         println!("═══════════════════════════════════════════════════════════");
@@ -462,7 +537,14 @@ fn display_forecasts_by_project_manager(forecast_service: &ForecastService) {
 }
 
 fn display_projects_by_project_manager(project_service: &ProjectService) {
+    let span = tracing::info_span!("display_projects_by_project_manager");
+    let _guard = span.enter();
     let projects_by_manager = project_service.get_projects_by_project_manager();
+
+    debug!(
+        manager_count = projects_by_manager.len(),
+        "Displaying projects by Project Manager"
+    );
 
     println!();
     println!("╔══════════════════════════════════════════════════════════╗");
@@ -471,10 +553,16 @@ fn display_projects_by_project_manager(project_service: &ProjectService) {
     println!();
 
     if projects_by_manager.is_empty() {
+        info!("No projects found");
         println!("✅ No projects found.");
         println!();
         return;
     }
+
+    info!(
+        manager_count = projects_by_manager.len(),
+        "Found projects grouped by Project Manager"
+    );
 
     for manager_group in projects_by_manager {
         println!("═══════════════════════════════════════════════════════════");
@@ -537,6 +625,10 @@ fn display_projects_by_project_manager(project_service: &ProjectService) {
 }
 
 pub fn show_main_menu(project_service: &ProjectService, forecast_service: &ForecastService) {
+    let span = tracing::info_span!("main_menu");
+    let _guard = span.enter();
+    info!("Main menu loop started");
+
     loop {
         println!();
         println!("╔══════════════════════════════════════════════════════════╗");
@@ -558,41 +650,52 @@ pub fn show_main_menu(project_service: &ProjectService, forecast_service: &Forec
             .with_prompt("Select an option")
             .items(&options)
             .default(0)
-            .interact()
-            .unwrap_or(0);
+            .interact();
 
         match selection {
-            0 => {
+            Ok(0) => {
                 // Show projects with no forecast
+                info!("User selected: Show projects with no forecast");
                 display_projects_without_forecasts(project_service);
             }
-            1 => {
+            Ok(1) => {
                 // Show on-hold projects
+                info!("User selected: Show on-hold projects");
                 display_on_hold_projects(project_service);
             }
-            2 => {
+            Ok(2) => {
                 // Show projects without Account Executive
+                info!("User selected: Show projects without Account Executive");
                 display_projects_without_account_executive(project_service);
             }
-            3 => {
+            Ok(3) => {
                 // Show all Account Executives
+                info!("User selected: Show all Account Executives");
                 display_all_account_executives(project_service);
             }
-            4 => {
+            Ok(4) => {
                 // Show forecasts by Project Manager
+                info!("User selected: Show forecasts by Project Manager");
                 display_forecasts_by_project_manager(forecast_service);
             }
-            5 => {
+            Ok(5) => {
                 // Show all projects by Project Manager
+                info!("User selected: Show all projects by Project Manager");
                 display_projects_by_project_manager(project_service);
             }
-            6 => {
+            Ok(6) => {
                 // Exit
+                info!("User selected: Exit - terminating application");
                 println!();
                 println!("👋 Goodbye!");
                 break;
             }
+            Err(e) => {
+                warn!(error = %e, "Invalid menu selection");
+                println!("❌ Invalid selection");
+            }
             _ => {
+                warn!("Unexpected menu selection");
                 println!("❌ Invalid selection");
             }
         }

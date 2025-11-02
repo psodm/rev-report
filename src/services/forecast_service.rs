@@ -4,6 +4,7 @@ use crate::db::repositories::project_repository::ProjectRepositoryTrait;
 use crate::models::forecast::Forecast;
 use crate::services::project_service::ProjectService;
 use std::collections::HashMap;
+use tracing::{debug, info, trace};
 
 pub struct ForecastService<'a> {
     repository: &'a InMemoryRepository,
@@ -23,9 +24,11 @@ impl<'a> ForecastService<'a> {
     /// Groups forecasts by project manager
     /// Returns a vector of ForecastByProjectManager, sorted by project manager name
     pub fn get_forecasts_by_project_manager(&self) -> Vec<ForecastByProjectManager> {
+        info!("Grouping forecasts by Project Manager");
         let all_forecasts = ForecastRepositoryTrait::find_all(self.repository);
         let mut grouped: HashMap<String, Vec<(Forecast, Option<String>)>> = HashMap::new();
 
+        trace!(total_forecasts = all_forecasts.len(), "Grouping forecasts");
         for forecast in all_forecasts {
             // Get customer name from project
             let customer_name =
@@ -53,6 +56,14 @@ impl<'a> ForecastService<'a> {
 
         result.sort_by(|a, b| a.project_manager.cmp(&b.project_manager));
 
+        debug!(
+            manager_count = result.len(),
+            "Grouped forecasts by Project Manager"
+        );
+        info!(
+            manager_count = result.len(),
+            "Retrieved forecasts grouped by Project Manager"
+        );
         result
     }
 }

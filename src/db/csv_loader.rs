@@ -8,28 +8,52 @@ use csv::ReaderBuilder;
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
+use tracing::{debug, error, info, trace, warn};
 
 /// Loads projects from a CSV file into the repository
 pub fn load_projects_from_csv(
     repo: &InMemoryRepository,
     file_path: &str,
 ) -> Result<usize, Box<dyn Error>> {
-    let file = File::open(file_path)?;
+    info!(file_path = %file_path, "Loading projects from CSV file");
+    let file = match File::open(file_path) {
+        Ok(f) => {
+            debug!(file_path = %file_path, "CSV file opened successfully");
+            f
+        }
+        Err(e) => {
+            error!(file_path = %file_path, error = %e, "Failed to open CSV file");
+            return Err(Box::new(e));
+        }
+    };
+
     let mut reader = ReaderBuilder::new()
         .has_headers(true)
         .from_reader(BufReader::new(file));
 
     let mut count = 0;
-    for result in reader.deserialize() {
-        let project: Project = result?;
-        // Skip the header row that has field names as data
-        if project.project_id == "code" {
-            continue;
+    let mut skipped_rows = 0;
+    for result in reader.deserialize::<Project>() {
+        match result {
+            Ok(project) => {
+                // Skip the header row that has field names as data
+                if project.project_id == "code" {
+                    trace!("Skipping 'code' header row");
+                    skipped_rows += 1;
+                    continue;
+                }
+                trace!(project_id = %project.project_id, "Loading project from CSV");
+                ProjectRepositoryTrait::insert(repo, project);
+                count += 1;
+            }
+            Err(e) => {
+                warn!(error = %e, "Failed to deserialize project row, skipping");
+                return Err(Box::new(e));
+            }
         }
-        ProjectRepositoryTrait::insert(repo, project);
-        count += 1;
     }
 
+    info!(file_path = %file_path, count = count, skipped_rows = skipped_rows, "Successfully loaded projects from CSV");
     Ok(count)
 }
 
@@ -69,11 +93,14 @@ pub fn load_forecasts_from_csv(
         return Err("CSV file must have at least 6 'Labor Rev Committ' columns".into());
     }
 
+    let mut skipped_rows = 0;
     for result in records {
         let record = match result {
             Ok(r) => r,
-            Err(_e) => {
+            Err(e) => {
                 // Skip rows that fail to parse (e.g., empty rows with wrong column count)
+                warn!(error = %e, "Failed to parse CSV row, skipping");
+                skipped_rows += 1;
                 continue;
             }
         };
@@ -83,17 +110,29 @@ pub fn load_forecasts_from_csv(
         let project_manager = record.get(1).unwrap_or("").to_string();
         let project_name = record.get(2).unwrap_or("").to_string();
         let project_id = record.get(3).unwrap_or("").to_string();
+
+        // Skip rows with empty project_id
+        if project_id.trim().is_empty() {
+            trace!("Skipping row with empty project_id");
+            skipped_rows += 1;
+            continue;
+        }
+
         let class = record.get(4).unwrap_or("").to_string();
         let start_date_str = record.get(5).unwrap_or("").to_string();
         let finish_date_str = record.get(6).unwrap_or("").to_string();
 
+        trace!(project_id = %project_id, "Loading forecast from CSV");
+
         // Parse dates from dd/mm/yyyy format
         let start_date = parse_date_from_dd_mm_yyyy(&start_date_str).unwrap_or_else(|| {
             // Default to epoch if parsing fails
+            warn!(project_id = %project_id, start_date_str = %start_date_str, "Failed to parse start date, using default");
             NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
         });
         let finish_date = parse_date_from_dd_mm_yyyy(&finish_date_str).unwrap_or_else(|| {
             // Default to epoch if parsing fails
+            warn!(project_id = %project_id, finish_date_str = %finish_date_str, "Failed to parse finish date, using default");
             NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
         });
 
@@ -134,8 +173,10 @@ pub fn load_forecasts_from_csv(
             .parse::<f64>()
             .unwrap_or(0.0);
 
-        // Skip rows with empty project_id (header rows or empty data)
-        if project_id.is_empty() || project_id == "ID" {
+        // Skip rows with ID header - already checked above for empty project_id
+        if project_id == "ID" {
+            trace!("Skipping row with 'ID' header");
+            skipped_rows += 1;
             continue;
         }
 
@@ -162,6 +203,7 @@ pub fn load_forecasts_from_csv(
         count += 1;
     }
 
+    info!(file_path = %file_path, count = count, skipped_rows = skipped_rows, "Successfully loaded forecasts from CSV");
     Ok(count)
 }
 
@@ -189,7 +231,34 @@ pub fn load_data_from_csvs(
     projects_path: &str,
     forecasts_path: &str,
 ) -> Result<(usize, usize), Box<dyn Error>> {
-    let project_count = load_projects_from_csv(repo, projects_path)?;
-    let forecast_count = load_forecasts_from_csv(repo, forecasts_path)?;
+    info!(projects_path = %projects_path, forecasts_path = %forecasts_path, "Loading data from CSV files");
+    let project_count = match load_projects_from_csv(repo, projects_path) {
+        Ok(count) => {
+            debug!(count = count, "Projects loaded successfully");
+            count
+        }
+        Err(e) => {
+            error!(projects_path = %projects_path, error = %e, "Failed to load projects from CSV");
+            return Err(e);
+        }
+    };
+
+    let forecast_count = match load_forecasts_from_csv(repo, forecasts_path) {
+        Ok(count) => {
+            debug!(count = count, "Forecasts loaded successfully");
+            count
+        }
+        Err(e) => {
+            error!(forecasts_path = %forecasts_path, error = %e, "Failed to load forecasts from CSV");
+            return Err(e);
+        }
+    };
+
+    info!(
+        project_count = project_count,
+        forecast_count = forecast_count,
+        "Successfully loaded all data from CSV files"
+    );
+
     Ok((project_count, forecast_count))
 }
