@@ -4,23 +4,10 @@ use crate::db::repositories::project_repository::ProjectRepositoryTrait;
 use crate::models::project::Project;
 use crate::services::forecast_service::ForecastService;
 use crate::services::project_service::ProjectService;
-use crate::utils::utils::format_currency;
+use crate::utils::utils::{format_currency, truncate_string};
 use dialoguer::{Input, Select};
 use std::path::Path;
 use tracing::{debug, error, info, trace, warn};
-
-/// Safely truncates a string to a maximum number of characters (not bytes)
-/// This handles multi-byte UTF-8 characters correctly
-fn truncate_string(s: &str, max_chars: usize) -> &str {
-    if s.chars().count() <= max_chars {
-        s
-    } else {
-        s.char_indices()
-            .nth(max_chars)
-            .map(|(idx, _)| &s[..idx])
-            .unwrap_or(s)
-    }
-}
 
 fn validate_csv_file_path(file_path: &str) -> Result<(), String> {
     trace!(file_path = %file_path, "Validating CSV file path");
@@ -297,9 +284,8 @@ fn display_on_hold_projects(project_service: &ProjectService) {
 fn display_projects_without_account_executive(project_service: &ProjectService) {
     let span = tracing::info_span!("display_projects_without_account_executive");
     let _guard = span.enter();
-    use std::collections::HashMap;
 
-    let projects = project_service.find_projects_without_account_executive();
+    let mut projects = project_service.find_projects_without_account_executive();
 
     println!();
     println!("╔══════════════════════════════════════════════════════════╗");
@@ -324,65 +310,48 @@ fn display_projects_without_account_executive(project_service: &ProjectService) 
         "Found projects without Account Executive"
     );
 
-    // Group projects by Project Manager
-    let mut grouped: HashMap<String, Vec<Project>> = HashMap::new();
-    for project in projects {
-        let project_manager_name =
-            ProjectService::extract_project_manager_name(&project.project_manager);
-        grouped
-            .entry(project_manager_name.to_string())
-            .or_insert_with(Vec::new)
-            .push(project);
-    }
+    // Sort projects by Project Manager name
+    projects.sort_by(|a, b| {
+        let manager_a = ProjectService::extract_project_manager_name(&a.project_manager);
+        let manager_b = ProjectService::extract_project_manager_name(&b.project_manager);
+        manager_a.cmp(&manager_b)
+    });
 
-    // Convert to vector and sort by Project Manager name
-    let mut manager_groups: Vec<(String, Vec<Project>)> = grouped.into_iter().collect();
-    manager_groups.sort_by(|a, b| a.0.cmp(&b.0));
-
-    let total_count: usize = manager_groups
-        .iter()
-        .map(|(_, projects)| projects.len())
-        .sum();
     println!(
         "Found {} project(s) without Account Executive:\n",
-        total_count
+        projects.len()
     );
 
-    for (manager_name, projects) in manager_groups {
-        println!("═══════════════════════════════════════════════════════════");
-        println!("Project Manager: {}", manager_name);
-        println!("═══════════════════════════════════════════════════════════");
-        println!();
+    // Single table header
+    println!("{:-<193}", "");
+    println!(
+        "{:<15} {:<48} {:<98} {:<32}",
+        "Project ID", "Customer", "Project", "Project Manager"
+    );
+    println!("{:-<193}", "");
 
-        println!("{:-<193}", "");
+    // Print all projects in a single table, ordered by Project Manager
+    for project in projects {
+        // Truncate customer name to max 44 characters
+        let customer_name = truncate_string(&project.end_customer_name, 44);
+
+        // Truncate project name to max 94 characters
+        let project_name = truncate_string(&project.project_name, 94);
+
+        // Extract just the name from project manager (remove account id part)
+        let project_manager_full_name =
+            ProjectService::extract_project_manager_name(&project.project_manager);
+        // Truncate project manager name to max 32 characters
+        let project_manager_name = truncate_string(project_manager_full_name, 32);
+
         println!(
             "{:<15} {:<48} {:<98} {:<32}",
-            "Project ID", "Customer", "Project", "Project Manager"
+            project.project_id, customer_name, project_name, project_manager_name
         );
-        println!("{:-<193}", "");
-
-        for project in projects {
-            // Truncate customer name to max 44 characters
-            let customer_name = truncate_string(&project.end_customer_name, 44);
-
-            // Truncate project name to max 94 characters
-            let project_name = truncate_string(&project.project_name, 94);
-
-            // Extract just the name from project manager (remove account id part)
-            let project_manager_full_name =
-                ProjectService::extract_project_manager_name(&project.project_manager);
-            // Truncate project manager name to max 32 characters
-            let project_manager_name = truncate_string(project_manager_full_name, 32);
-
-            println!(
-                "{:<15} {:<48} {:<98} {:<32}",
-                project.project_id, customer_name, project_name, project_manager_name
-            );
-        }
-
-        println!("{:-<193}", "");
-        println!();
     }
+
+    println!("{:-<193}", "");
+    println!();
 }
 
 fn display_on_hold_projects_by_account_executive(project_service: &ProjectService) {
@@ -789,6 +758,112 @@ fn display_revenue_summary_by_account_executive(forecast_service: &ForecastServi
     );
 }
 
+fn display_total_revenue_forecast(forecast_service: &ForecastService) {
+    let span = tracing::info_span!("display_total_revenue_forecast");
+    let _guard = span.enter();
+
+    let (month1_total, month2_total, month3_total, month4_total, month5_total, month6_total) =
+        forecast_service.get_total_revenue_forecast();
+
+    println!();
+    println!("╔══════════════════════════════════════════════════════════╗");
+    println!("║           Total Revenue Forecast (All Projects)          ║");
+    println!("╚══════════════════════════════════════════════════════════╝");
+    println!();
+
+    // Use USD as default currency for formatting
+    let default_currency = "USD";
+
+    println!("{:-<150}", "");
+    println!(
+        "{:<20} {:>18} {:>18} {:>18} {:>18} {:>18} {:>18}",
+        "Total Revenue", "Month 1", "Month 2", "Month 3", "Month 4", "Month 5", "Month 6"
+    );
+    println!("{:-<150}", "");
+
+    println!(
+        "{:<20} {:>18} {:>18} {:>18} {:>18} {:>18} {:>18}",
+        "",
+        format_currency(month1_total, default_currency),
+        format_currency(month2_total, default_currency),
+        format_currency(month3_total, default_currency),
+        format_currency(month4_total, default_currency),
+        format_currency(month5_total, default_currency),
+        format_currency(month6_total, default_currency),
+    );
+
+    println!("{:-<150}", "");
+    println!();
+
+    info!(
+        month1 = month1_total,
+        month2 = month2_total,
+        month3 = month3_total,
+        month4 = month4_total,
+        month5 = month5_total,
+        month6 = month6_total,
+        "Displayed total revenue forecast"
+    );
+}
+
+fn display_forecast_by_sales_org(forecast_service: &ForecastService) {
+    let span = tracing::info_span!("display_forecast_by_sales_org");
+    let _guard = span.enter();
+
+    let summaries = forecast_service.get_revenue_summary_by_sales_org();
+
+    println!();
+    println!("╔══════════════════════════════════════════════════════════╗");
+    println!("║              Forecast for Sales Orgs                      ║");
+    println!("╚══════════════════════════════════════════════════════════╝");
+    println!();
+
+    if summaries.is_empty() {
+        info!("No revenue summaries found");
+        println!("✅ No revenue summaries found.");
+        println!();
+        return;
+    }
+
+    let total_count = summaries.len();
+    info!(
+        sales_org_count = total_count,
+        "Displaying revenue summaries by Sales Org"
+    );
+    println!("Found {} Sales Org(s):\n", total_count);
+
+    // Use USD as default currency for formatting
+    let default_currency = "USD";
+
+    println!("{:-<150}", "");
+    println!(
+        "{:<30} {:>18} {:>18} {:>18} {:>18} {:>18} {:>18}",
+        "Sales Org", "Month 1", "Month 2", "Month 3", "Month 4", "Month 5", "Month 6"
+    );
+    println!("{:-<150}", "");
+
+    for summary in summaries {
+        println!(
+            "{:<30} {:>18} {:>18} {:>18} {:>18} {:>18} {:>18}",
+            truncate_string(&summary.sales_org, 28),
+            format_currency(summary.month1_total, default_currency),
+            format_currency(summary.month2_total, default_currency),
+            format_currency(summary.month3_total, default_currency),
+            format_currency(summary.month4_total, default_currency),
+            format_currency(summary.month5_total, default_currency),
+            format_currency(summary.month6_total, default_currency),
+        );
+    }
+
+    println!("{:-<150}", "");
+    println!();
+
+    debug!(
+        sales_org_count = total_count,
+        "Displayed revenue summaries by Sales Org"
+    );
+}
+
 pub fn show_main_menu(project_service: &ProjectService, forecast_service: &ForecastService) {
     let span = tracing::info_span!("main_menu");
     let _guard = span.enter();
@@ -810,6 +885,8 @@ pub fn show_main_menu(project_service: &ProjectService, forecast_service: &Forec
             "Show forecasts by Project Manager",
             "Show all projects by Project Manager",
             "Show revenue summary for Account Executive",
+            "Show total revenue forecast (all projects)",
+            "Show forecast for Sales Orgs",
             "Exit",
         ];
 
@@ -861,6 +938,16 @@ pub fn show_main_menu(project_service: &ProjectService, forecast_service: &Forec
                 display_revenue_summary_by_account_executive(forecast_service);
             }
             Ok(8) => {
+                // Show total revenue forecast (all projects)
+                info!("User selected: Show total revenue forecast (all projects)");
+                display_total_revenue_forecast(forecast_service);
+            }
+            Ok(9) => {
+                // Show forecast for Sales Orgs
+                info!("User selected: Show forecast for Sales Orgs");
+                display_forecast_by_sales_org(forecast_service);
+            }
+            Ok(10) => {
                 // Exit
                 info!("User selected: Exit - terminating application");
                 println!();

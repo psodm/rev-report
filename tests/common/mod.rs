@@ -11,6 +11,7 @@ use std::path::PathBuf;
 pub fn create_test_project(project_id: &str, project_name: &str) -> Project {
     Project {
         project_id: project_id.to_string(),
+        sales_org: "TEST-ORG".to_string(),
         end_customer_name: "Test Customer".to_string(),
         project_name: project_name.to_string(),
         project_manager: "Test Manager".to_string(),
@@ -59,11 +60,11 @@ pub fn create_temp_projects_csv() -> PathBuf {
     let _ = fs::remove_file(&file_path);
     
     let mut file = File::create(&file_path).unwrap();
-    writeln!(file, "\"Project ID\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold\",\"On Hold Comment\"").unwrap();
-    writeln!(file, "\"code\",\"z_end_customer_name\",\"name\",\"manager\",\"z_other_stakeholder\",\"scheduleStart\",\"scheduleFinish\",\"z_ca_svcs_proj_hold\",\"z_ca_svcs_proj_holdcom\"").unwrap();
-    writeln!(file, "\"PROJ-001\",\"Test Customer 1\",\"Test Project 1\",\"Manager 1\",\"AE 1\",\"2024-01-01\",\"2024-12-31\",\"false\",\"\"").unwrap();
-    writeln!(file, "\"PROJ-002\",\"Test Customer 2\",\"Test Project 2\",\"Manager 2\",,\"2025-01-01\",\"2025-12-31\",\"true\",\"On hold for review\"").unwrap();
-    writeln!(file, "\"PROJ-003\",\"Test Customer 3\",\"Test Project 3\",\"Manager 3\",\"AE 3\",\"2026-01-01\",\"2026-12-31\",\"false\",\"\"").unwrap();
+    writeln!(file, "\"Project ID\",\"Sales Org\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold Comment\",\"On Hold\"").unwrap();
+    writeln!(file, "\"code\",\"z_sales_org\",\"z_end_customer_name\",\"name\",\"manager\",\"z_other_stakeholder\",\"scheduleStart\",\"scheduleFinish\",\"z_ca_svcs_proj_holdcom\",\"z_ca_svcs_proj_hold\"").unwrap();
+    writeln!(file, "\"PROJ-001\",\"TEST-ORG-1\",\"Test Customer 1\",\"Test Project 1\",\"Manager 1\",\"AE 1\",\"2024-01-01\",\"2024-12-31\",\"\",\"false\"").unwrap();
+    writeln!(file, "\"PROJ-002\",\"TEST-ORG-2\",\"Test Customer 2\",\"Test Project 2\",\"Manager 2\",,\"2025-01-01\",\"2025-12-31\",\"On hold for review\",\"true\"").unwrap();
+    writeln!(file, "\"PROJ-003\",\"TEST-ORG-3\",\"Test Customer 3\",\"Test Project 3\",\"Manager 3\",\"AE 3\",\"2026-01-01\",\"2026-12-31\",\"\",\"false\"").unwrap();
     
     file_path
 }

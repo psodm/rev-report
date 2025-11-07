@@ -4,6 +4,8 @@ use serde::{Deserialize, Deserializer};
 pub struct Project {
     #[serde(rename = "Project ID")]
     pub project_id: String,
+    #[serde(rename = "Sales Org")]
+    pub sales_org: String,
     #[serde(rename = "End Customer Name")]
     pub end_customer_name: String,
     #[serde(rename = "Project Name")]

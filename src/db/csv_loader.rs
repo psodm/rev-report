@@ -3,6 +3,7 @@ use crate::db::repositories::in_memory_repository::InMemoryRepository;
 use crate::db::repositories::project_repository::ProjectRepositoryTrait;
 use crate::models::forecast::Forecast;
 use crate::models::project::Project;
+use crate::utils::utils::parse_date_from_dd_mm_yyyy;
 use chrono::NaiveDate;
 use csv::ReaderBuilder;
 use std::error::Error;
@@ -205,24 +206,6 @@ pub fn load_forecasts_from_csv(
 
     info!(file_path = %file_path, count = count, skipped_rows = skipped_rows, "Successfully loaded forecasts from CSV");
     Ok(count)
-}
-
-/// Parses a date string in dd/mm/yyyy format to NaiveDate
-fn parse_date_from_dd_mm_yyyy(date_str: &str) -> Option<NaiveDate> {
-    if date_str.is_empty() {
-        return None;
-    }
-
-    let parts: Vec<&str> = date_str.split('/').collect();
-    if parts.len() != 3 {
-        return None;
-    }
-
-    let day = parts[0].parse::<u32>().ok()?;
-    let month = parts[1].parse::<u32>().ok()?;
-    let year = parts[2].parse::<i32>().ok()?;
-
-    NaiveDate::from_ymd_opt(year, month, day)
 }
 
 /// Loads both projects and forecasts from CSV files into the repository

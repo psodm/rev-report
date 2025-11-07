@@ -58,7 +58,7 @@ fn test_load_projects_from_csv_empty_file() {
     let temp_dir = std::env::temp_dir();
     let file_path = temp_dir.join(format!("empty_projects_{}.csv", std::process::id()));
     let mut file = File::create(&file_path).unwrap();
-    writeln!(file, "\"Project ID\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold\",\"On Hold Comment\"").unwrap();
+    writeln!(file, "\"Project ID\",\"Sales Org\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold Comment\",\"On Hold\"").unwrap();
     
     let result = load_projects_from_csv(&repo, file_path.to_str().unwrap());
     assert!(result.is_ok());
@@ -272,10 +272,10 @@ fn test_load_projects_from_csv_with_optional_fields() {
     let temp_dir = std::env::temp_dir();
     let file_path = temp_dir.join(format!("projects_optional_{}.csv", std::process::id()));
     let mut file = File::create(&file_path).unwrap();
-    writeln!(file, "\"Project ID\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold\",\"On Hold Comment\"").unwrap();
-    writeln!(file, "\"code\",\"z_end_customer_name\",\"name\",\"manager\",\"z_other_stakeholder\",\"scheduleStart\",\"scheduleFinish\",\"z_ca_svcs_proj_hold\",\"z_ca_svcs_proj_holdcom\"").unwrap();
-    writeln!(file, "\"PROJ-001\",\"Customer 1\",\"Project 1\",\"Manager 1\",,\"2024-01-01\",\"2024-12-31\",\"false\",\"\"").unwrap();
-    writeln!(file, "\"PROJ-002\",\"Customer 2\",\"Project 2\",\"Manager 2\",\"AE 2\",\"2025-01-01\",\"2025-12-31\",\"True\",\"Comment\"").unwrap();
+    writeln!(file, "\"Project ID\",\"Sales Org\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold Comment\",\"On Hold\"").unwrap();
+    writeln!(file, "\"code\",\"z_sales_org\",\"z_end_customer_name\",\"name\",\"manager\",\"z_other_stakeholder\",\"scheduleStart\",\"scheduleFinish\",\"z_ca_svcs_proj_holdcom\",\"z_ca_svcs_proj_hold\"").unwrap();
+    writeln!(file, "\"PROJ-001\",\"TEST-ORG-1\",\"Customer 1\",\"Project 1\",\"Manager 1\",,\"2024-01-01\",\"2024-12-31\",\"\",\"false\"").unwrap();
+    writeln!(file, "\"PROJ-002\",\"TEST-ORG-2\",\"Customer 2\",\"Project 2\",\"Manager 2\",\"AE 2\",\"2025-01-01\",\"2025-12-31\",\"Comment\",\"True\"").unwrap();
     
     let result = load_projects_from_csv(&repo, file_path.to_str().unwrap());
     assert!(result.is_ok());
@@ -301,10 +301,10 @@ fn test_load_projects_from_csv_updates_existing() {
     let temp_dir = std::env::temp_dir();
     let file_path = temp_dir.join(format!("projects_duplicate_{}.csv", std::process::id()));
     let mut file = File::create(&file_path).unwrap();
-    writeln!(file, "\"Project ID\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold\",\"On Hold Comment\"").unwrap();
-    writeln!(file, "\"code\",\"z_end_customer_name\",\"name\",\"manager\",\"z_other_stakeholder\",\"scheduleStart\",\"scheduleFinish\",\"z_ca_svcs_proj_hold\",\"z_ca_svcs_proj_holdcom\"").unwrap();
-    writeln!(file, "\"PROJ-001\",\"Original Customer\",\"Original Project\",\"Manager 1\",,\"2024-01-01\",\"2024-12-31\",\"false\",\"\"").unwrap();
-    writeln!(file, "\"PROJ-001\",\"Updated Customer\",\"Updated Project\",\"Manager 2\",\"AE 2\",\"2025-01-01\",\"2025-12-31\",\"true\",\"Updated comment\"").unwrap();
+    writeln!(file, "\"Project ID\",\"Sales Org\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold Comment\",\"On Hold\"").unwrap();
+    writeln!(file, "\"code\",\"z_sales_org\",\"z_end_customer_name\",\"name\",\"manager\",\"z_other_stakeholder\",\"scheduleStart\",\"scheduleFinish\",\"z_ca_svcs_proj_holdcom\",\"z_ca_svcs_proj_hold\"").unwrap();
+    writeln!(file, "\"PROJ-001\",\"TEST-ORG-1\",\"Original Customer\",\"Original Project\",\"Manager 1\",,\"2024-01-01\",\"2024-12-31\",\"\",\"false\"").unwrap();
+    writeln!(file, "\"PROJ-001\",\"TEST-ORG-2\",\"Updated Customer\",\"Updated Project\",\"Manager 2\",\"AE 2\",\"2025-01-01\",\"2025-12-31\",\"Updated comment\",\"true\"").unwrap();
     
     let result = load_projects_from_csv(&repo, file_path.to_str().unwrap());
     assert!(result.is_ok());
@@ -333,9 +333,9 @@ fn test_load_projects_from_csv_skips_code_header() {
     let temp_dir = std::env::temp_dir();
     let file_path = temp_dir.join(format!("projects_header_{}.csv", std::process::id()));
     let mut file = File::create(&file_path).unwrap();
-    writeln!(file, "\"Project ID\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold\",\"On Hold Comment\"").unwrap();
-    writeln!(file, "\"code\",\"z_end_customer_name\",\"name\",\"manager\",\"z_other_stakeholder\",\"scheduleStart\",\"scheduleFinish\",\"z_ca_svcs_proj_hold\",\"z_ca_svcs_proj_holdcom\"").unwrap();
-    writeln!(file, "\"PROJ-001\",\"Customer 1\",\"Project 1\",\"Manager 1\",,\"2024-01-01\",\"2024-12-31\",\"false\",\"\"").unwrap();
+    writeln!(file, "\"Project ID\",\"Sales Org\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold Comment\",\"On Hold\"").unwrap();
+    writeln!(file, "\"code\",\"z_sales_org\",\"z_end_customer_name\",\"name\",\"manager\",\"z_other_stakeholder\",\"scheduleStart\",\"scheduleFinish\",\"z_ca_svcs_proj_holdcom\",\"z_ca_svcs_proj_hold\"").unwrap();
+    writeln!(file, "\"PROJ-001\",\"TEST-ORG-1\",\"Customer 1\",\"Project 1\",\"Manager 1\",,\"2024-01-01\",\"2024-12-31\",\"\",\"false\"").unwrap();
     
     let result = load_projects_from_csv(&repo, file_path.to_str().unwrap());
     assert!(result.is_ok());

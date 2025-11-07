@@ -27,6 +27,17 @@ pub struct RevenueSummaryByAccountExecutive {
     pub month6_total: f64,
 }
 
+#[derive(Clone, Debug)]
+pub struct RevenueSummaryBySalesOrg {
+    pub sales_org: String,
+    pub month1_total: f64,
+    pub month2_total: f64,
+    pub month3_total: f64,
+    pub month4_total: f64,
+    pub month5_total: f64,
+    pub month6_total: f64,
+}
+
 impl<'a> ForecastService<'a> {
     pub fn new(repository: &'a InMemoryRepository) -> Self {
         Self { repository }
@@ -141,6 +152,117 @@ impl<'a> ForecastService<'a> {
 
         debug!(ae_count = result.len(), "Calculated revenue summaries by Account Executive");
         info!(ae_count = result.len(), "Retrieved revenue summaries grouped by Account Executive");
+
+        result
+    }
+
+    /// Calculates total revenue forecast across all projects for each month
+    /// Returns a tuple of (month1_total, month2_total, month3_total, month4_total, month5_total, month6_total)
+    pub fn get_total_revenue_forecast(&self) -> (f64, f64, f64, f64, f64, f64) {
+        let span = tracing::info_span!("get_total_revenue_forecast");
+        let _guard = span.enter();
+        info!("Calculating total revenue forecast across all projects");
+
+        let all_forecasts = ForecastRepositoryTrait::find_all(self.repository);
+        
+        let mut month1_total = 0.0;
+        let mut month2_total = 0.0;
+        let mut month3_total = 0.0;
+        let mut month4_total = 0.0;
+        let mut month5_total = 0.0;
+        let mut month6_total = 0.0;
+
+        trace!(total_forecasts = all_forecasts.len(), "Summing revenue forecasts");
+
+        for forecast in all_forecasts {
+            month1_total += forecast.month1_labor_revenue_commit;
+            month2_total += forecast.month2_labor_revenue_commit;
+            month3_total += forecast.month3_labor_revenue_commit;
+            month4_total += forecast.month4_labor_revenue_commit;
+            month5_total += forecast.month5_labor_revenue_commit;
+            month6_total += forecast.month6_labor_revenue_commit;
+        }
+
+        info!(
+            month1 = month1_total,
+            month2 = month2_total,
+            month3 = month3_total,
+            month4 = month4_total,
+            month5 = month5_total,
+            month6 = month6_total,
+            "Calculated total revenue forecast"
+        );
+
+        (month1_total, month2_total, month3_total, month4_total, month5_total, month6_total)
+    }
+
+    /// Calculates revenue summaries grouped by Sales Org
+    /// Returns a vector of RevenueSummaryBySalesOrg, sorted by Sales Org name
+    pub fn get_revenue_summary_by_sales_org(&self) -> Vec<RevenueSummaryBySalesOrg> {
+        let span = tracing::info_span!("get_revenue_summary_by_sales_org");
+        let _guard = span.enter();
+        info!("Calculating revenue summaries by Sales Org");
+
+        let all_projects = ProjectRepositoryTrait::find_all(self.repository);
+        let mut summaries: HashMap<String, (f64, f64, f64, f64, f64, f64)> = HashMap::new();
+
+        trace!(total_projects = all_projects.len(), "Processing projects for Sales Org revenue summary");
+
+        for project in all_projects {
+            // Get the Sales Org, skip if empty
+            let sales_org = project.sales_org.trim();
+            if sales_org.is_empty() {
+                trace!(project_id = %project.project_id, "Skipping project with empty Sales Org");
+                continue;
+            }
+
+            // Get the forecast for this project
+            let forecast = match ForecastRepositoryTrait::find_by_id(self.repository, &project.project_id) {
+                Some(f) => f,
+                None => {
+                    trace!(project_id = %project.project_id, "Skipping project without forecast");
+                    continue; // Skip projects without a forecast
+                }
+            };
+
+            // Get or create the summary for this Sales Org
+            let summary = summaries.entry(sales_org.to_string()).or_insert((0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+
+            // Add this project's forecast amounts to the totals
+            summary.0 += forecast.month1_labor_revenue_commit;
+            summary.1 += forecast.month2_labor_revenue_commit;
+            summary.2 += forecast.month3_labor_revenue_commit;
+            summary.3 += forecast.month4_labor_revenue_commit;
+            summary.4 += forecast.month5_labor_revenue_commit;
+            summary.5 += forecast.month6_labor_revenue_commit;
+
+            trace!(
+                sales_org = %sales_org,
+                project_id = %project.project_id,
+                "Added forecast to Sales Org summary"
+            );
+        }
+
+        // Convert to vector and sort by Sales Org name
+        let mut result: Vec<RevenueSummaryBySalesOrg> = summaries
+            .into_iter()
+            .map(|(sales_org, (m1, m2, m3, m4, m5, m6))| {
+                RevenueSummaryBySalesOrg {
+                    sales_org,
+                    month1_total: m1,
+                    month2_total: m2,
+                    month3_total: m3,
+                    month4_total: m4,
+                    month5_total: m5,
+                    month6_total: m6,
+                }
+            })
+            .collect();
+
+        result.sort_by(|a, b| a.sales_org.cmp(&b.sales_org));
+
+        debug!(sales_org_count = result.len(), "Calculated revenue summaries by Sales Org");
+        info!(sales_org_count = result.len(), "Retrieved revenue summaries grouped by Sales Org");
 
         result
     }
