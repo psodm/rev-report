@@ -52,7 +52,10 @@ fn test_project_service_extract_project_manager_name_complex_format() {
 fn test_project_service_sanitize_on_hold_comment_with_newlines() {
     let input = "On hold - New Resources are in progress for onboarding";
     let result = ProjectService::sanitize_on_hold_comment(input);
-    assert_eq!(result, "On hold - New Resources are in progress for onboarding");
+    assert_eq!(
+        result,
+        "On hold - New Resources are in progress for onboarding"
+    );
 }
 
 #[test]
@@ -108,7 +111,10 @@ fn test_project_service_sanitize_on_hold_comment_with_newlines_and_whitespace() 
 fn test_project_service_sanitize_on_hold_comment_no_newlines() {
     let input = "On hold - New Resources are in progress for onboarding";
     let result = ProjectService::sanitize_on_hold_comment(input);
-    assert_eq!(result, "On hold - New Resources are in progress for onboarding");
+    assert_eq!(
+        result,
+        "On hold - New Resources are in progress for onboarding"
+    );
 }
 
 #[test]
@@ -120,16 +126,16 @@ fn test_project_service_find_projects_without_forecasts() {
     let forecast1 = create_test_forecast("PROJ-001", "Project 1");
     let forecast2 = create_test_forecast("PROJ-002", "Project 2");
     // PROJ-003 has no forecast
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ProjectRepositoryTrait::insert(&repo, project3);
     ForecastRepositoryTrait::insert(&repo, forecast1);
     ForecastRepositoryTrait::insert(&repo, forecast2);
-    
+
     let project_service = ProjectService::new(&repo);
     let projects_without_forecasts = project_service.find_projects_without_forecasts();
-    
+
     assert_eq!(projects_without_forecasts.len(), 1);
     assert_eq!(projects_without_forecasts[0].project_id, "PROJ-003");
 }
@@ -141,15 +147,15 @@ fn test_project_service_find_projects_without_forecasts_all_have_forecasts() {
     let project2 = create_test_project("PROJ-002", "Project 2");
     let forecast1 = create_test_forecast("PROJ-001", "Project 1");
     let forecast2 = create_test_forecast("PROJ-002", "Project 2");
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ForecastRepositoryTrait::insert(&repo, forecast1);
     ForecastRepositoryTrait::insert(&repo, forecast2);
-    
+
     let project_service = ProjectService::new(&repo);
     let projects_without_forecasts = project_service.find_projects_without_forecasts();
-    
+
     assert_eq!(projects_without_forecasts.len(), 0);
 }
 
@@ -159,14 +165,14 @@ fn test_project_service_find_projects_without_forecasts_none_have_forecasts() {
     let project1 = create_test_project("PROJ-001", "Project 1");
     let project2 = create_test_project("PROJ-002", "Project 2");
     let project3 = create_test_project("PROJ-003", "Project 3");
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ProjectRepositoryTrait::insert(&repo, project3);
-    
+
     let project_service = ProjectService::new(&repo);
     let projects_without_forecasts = project_service.find_projects_without_forecasts();
-    
+
     assert_eq!(projects_without_forecasts.len(), 3);
 }
 
@@ -175,7 +181,7 @@ fn test_project_service_find_projects_without_forecasts_empty_repository() {
     let repo = InMemoryRepository::new();
     let project_service = ProjectService::new(&repo);
     let projects_without_forecasts = project_service.find_projects_without_forecasts();
-    
+
     assert_eq!(projects_without_forecasts.len(), 0);
 }
 
@@ -193,17 +199,20 @@ fn test_project_service_find_projects_without_forecasts_with_zero_forecast() {
     forecast1.month5_labor_revenue_commit = 0.0;
     forecast1.month6_labor_revenue_commit = 0.0;
     // PROJ-002 has no forecast
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ForecastRepositoryTrait::insert(&repo, forecast1);
-    
+
     let project_service = ProjectService::new(&repo);
     let projects_without_forecasts = project_service.find_projects_without_forecasts();
-    
+
     // Both projects should be in the list: PROJ-001 has zero forecast, PROJ-002 has no forecast
     assert_eq!(projects_without_forecasts.len(), 2);
-    let project_ids: Vec<String> = projects_without_forecasts.iter().map(|p| p.project_id.clone()).collect();
+    let project_ids: Vec<String> = projects_without_forecasts
+        .iter()
+        .map(|p| p.project_id.clone())
+        .collect();
     assert!(project_ids.contains(&"PROJ-001".to_string()));
     assert!(project_ids.contains(&"PROJ-002".to_string()));
 }
@@ -223,15 +232,15 @@ fn test_project_service_find_projects_without_forecasts_with_partial_zero_foreca
     forecast1.month6_labor_revenue_commit = 0.0;
     let forecast2 = create_test_forecast("PROJ-002", "Project 2");
     // PROJ-002 has a forecast with non-zero values
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ForecastRepositoryTrait::insert(&repo, forecast1);
     ForecastRepositoryTrait::insert(&repo, forecast2);
-    
+
     let project_service = ProjectService::new(&repo);
     let projects_without_forecasts = project_service.find_projects_without_forecasts();
-    
+
     // Neither project should be in the list: both have non-zero forecasts
     assert_eq!(projects_without_forecasts.len(), 0);
 }
@@ -253,21 +262,24 @@ fn test_project_service_find_projects_without_forecasts_mixed_scenarios() {
     forecast2.month6_labor_revenue_commit = 0.0;
     let forecast3 = create_test_forecast("PROJ-003", "Project 3");
     // PROJ-003 has a forecast with non-zero values (from create_test_forecast)
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ProjectRepositoryTrait::insert(&repo, project3);
     ProjectRepositoryTrait::insert(&repo, project4);
     ForecastRepositoryTrait::insert(&repo, forecast2);
     ForecastRepositoryTrait::insert(&repo, forecast3);
-    
+
     let project_service = ProjectService::new(&repo);
     let projects_without_forecasts = project_service.find_projects_without_forecasts();
-    
+
     // PROJ-001 and PROJ-004 have no forecast, PROJ-002 has zero forecast
     // PROJ-003 has non-zero forecast, so it should not be in the list
     assert_eq!(projects_without_forecasts.len(), 3);
-    let project_ids: Vec<String> = projects_without_forecasts.iter().map(|p| p.project_id.clone()).collect();
+    let project_ids: Vec<String> = projects_without_forecasts
+        .iter()
+        .map(|p| p.project_id.clone())
+        .collect();
     assert!(project_ids.contains(&"PROJ-001".to_string()));
     assert!(project_ids.contains(&"PROJ-002".to_string()));
     assert!(project_ids.contains(&"PROJ-004".to_string()));
@@ -285,19 +297,22 @@ fn test_project_service_find_projects_without_account_executive() {
     project3.account_executive = Some("   ".to_string()); // Whitespace only
     let project4 = create_test_project("PROJ-004", "Project 4");
     // Has account executive (default from create_test_project)
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ProjectRepositoryTrait::insert(&repo, project3);
     ProjectRepositoryTrait::insert(&repo, project4);
-    
+
     let project_service = ProjectService::new(&repo);
     let projects_without_ae = project_service.find_projects_without_account_executive();
-    
+
     // PROJ-001, PROJ-002, and PROJ-003 should be in the list
     // PROJ-004 has an account executive, so it should not be in the list
     assert_eq!(projects_without_ae.len(), 3);
-    let project_ids: Vec<String> = projects_without_ae.iter().map(|p| p.project_id.clone()).collect();
+    let project_ids: Vec<String> = projects_without_ae
+        .iter()
+        .map(|p| p.project_id.clone())
+        .collect();
     assert!(project_ids.contains(&"PROJ-001".to_string()));
     assert!(project_ids.contains(&"PROJ-002".to_string()));
     assert!(project_ids.contains(&"PROJ-003".to_string()));
@@ -310,13 +325,13 @@ fn test_project_service_find_projects_without_account_executive_all_have_ae() {
     let project1 = create_test_project("PROJ-001", "Project 1");
     let project2 = create_test_project("PROJ-002", "Project 2");
     // Both have account executives (from create_test_project)
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
-    
+
     let project_service = ProjectService::new(&repo);
     let projects_without_ae = project_service.find_projects_without_account_executive();
-    
+
     assert_eq!(projects_without_ae.len(), 0);
 }
 
@@ -327,13 +342,13 @@ fn test_project_service_find_projects_without_account_executive_none_have_ae() {
     project1.account_executive = None;
     let mut project2 = create_test_project("PROJ-002", "Project 2");
     project2.account_executive = None;
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
-    
+
     let project_service = ProjectService::new(&repo);
     let projects_without_ae = project_service.find_projects_without_account_executive();
-    
+
     assert_eq!(projects_without_ae.len(), 2);
 }
 
@@ -342,7 +357,7 @@ fn test_project_service_find_projects_without_account_executive_empty_repository
     let repo = InMemoryRepository::new();
     let project_service = ProjectService::new(&repo);
     let projects_without_ae = project_service.find_projects_without_account_executive();
-    
+
     assert_eq!(projects_without_ae.len(), 0);
 }
 
@@ -357,15 +372,15 @@ fn test_project_service_find_all_account_executives() {
     project3.account_executive = Some("John Doe".to_string()); // Duplicate
     let mut project4 = create_test_project("PROJ-004", "Project 4");
     project4.account_executive = Some("Bob Johnson".to_string());
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ProjectRepositoryTrait::insert(&repo, project3);
     ProjectRepositoryTrait::insert(&repo, project4);
-    
+
     let project_service = ProjectService::new(&repo);
     let account_executives = project_service.find_all_account_executives();
-    
+
     // Should have 3 unique account executives, sorted alphabetically
     assert_eq!(account_executives.len(), 3);
     assert_eq!(account_executives[0], "Bob Johnson");
@@ -378,7 +393,7 @@ fn test_project_service_find_all_account_executives_empty_repository() {
     let repo = InMemoryRepository::new();
     let project_service = ProjectService::new(&repo);
     let account_executives = project_service.find_all_account_executives();
-    
+
     assert_eq!(account_executives.len(), 0);
 }
 
@@ -391,14 +406,14 @@ fn test_project_service_find_all_account_executives_no_account_executives() {
     project2.account_executive = Some("".to_string()); // Empty string
     let mut project3 = create_test_project("PROJ-003", "Project 3");
     project3.account_executive = Some("   ".to_string()); // Whitespace only
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ProjectRepositoryTrait::insert(&repo, project3);
-    
+
     let project_service = ProjectService::new(&repo);
     let account_executives = project_service.find_all_account_executives();
-    
+
     // Should have 0 account executives (empty/whitespace-only are ignored)
     assert_eq!(account_executives.len(), 0);
 }
@@ -412,14 +427,14 @@ fn test_project_service_find_all_account_executives_with_whitespace() {
     project2.account_executive = Some("John Doe".to_string()); // Without whitespace
     let mut project3 = create_test_project("PROJ-003", "Project 3");
     project3.account_executive = Some("Jane Smith".to_string());
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ProjectRepositoryTrait::insert(&repo, project3);
-    
+
     let project_service = ProjectService::new(&repo);
     let account_executives = project_service.find_all_account_executives();
-    
+
     // Should have 2 unique account executives (trimmed "John Doe" should be deduplicated)
     // "  John Doe  " trimmed becomes "John Doe", so it should match the other "John Doe"
     assert_eq!(account_executives.len(), 2);
@@ -432,7 +447,7 @@ fn test_project_service_get_projects_by_project_manager_empty_repository() {
     let repo = InMemoryRepository::new();
     let project_service = ProjectService::new(&repo);
     let result = project_service.get_projects_by_project_manager();
-    
+
     assert_eq!(result.len(), 0);
 }
 
@@ -445,19 +460,19 @@ fn test_project_service_get_projects_by_project_manager_single_manager() {
     project2.project_manager = "Smith, John".to_string();
     let forecast1 = create_test_forecast("PROJ-001", "Project 1");
     let forecast2 = create_test_forecast("PROJ-002", "Project 2");
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ForecastRepositoryTrait::insert(&repo, forecast1);
     ForecastRepositoryTrait::insert(&repo, forecast2);
-    
+
     let project_service = ProjectService::new(&repo);
     let result = project_service.get_projects_by_project_manager();
-    
+
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].project_manager, "Smith, John");
     assert_eq!(result[0].projects.len(), 2);
-    
+
     // Check that contract values are included
     let (_, contract_values1) = &result[0].projects[0];
     assert!(contract_values1.is_some());
@@ -477,14 +492,14 @@ fn test_project_service_get_projects_by_project_manager_multiple_managers() {
     project2.project_manager = "Doe, Jane".to_string();
     let mut project3 = create_test_project("PROJ-003", "Project 3");
     project3.project_manager = "Smith, John".to_string();
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ProjectRepositoryTrait::insert(&repo, project3);
-    
+
     let project_service = ProjectService::new(&repo);
     let result = project_service.get_projects_by_project_manager();
-    
+
     // Should be sorted alphabetically: "Doe, Jane" comes before "Smith, John"
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].project_manager, "Doe, Jane");
@@ -502,14 +517,14 @@ fn test_project_service_get_projects_by_project_manager_extracts_manager_name() 
     project2.project_manager = "Smith, John{jsmith@example.com}".to_string();
     let mut project3 = create_test_project("PROJ-003", "Project 3");
     project3.project_manager = "Doe, Jane{jdoe@example.com}".to_string();
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ProjectRepositoryTrait::insert(&repo, project3);
-    
+
     let project_service = ProjectService::new(&repo);
     let result = project_service.get_projects_by_project_manager();
-    
+
     // Should extract just the name part (before the '{')
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].project_manager, "Doe, Jane");
@@ -525,17 +540,17 @@ fn test_project_service_get_projects_by_project_manager_without_forecasts() {
     project2.project_manager = "Smith, John".to_string();
     let forecast1 = create_test_forecast("PROJ-001", "Project 1");
     // PROJ-002 has no forecast
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ForecastRepositoryTrait::insert(&repo, forecast1);
-    
+
     let project_service = ProjectService::new(&repo);
     let result = project_service.get_projects_by_project_manager();
-    
+
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].projects.len(), 2);
-    
+
     // Find projects by ID (order is not guaranteed with HashMap)
     let (proj1_item, contract_values1) = result[0]
         .projects
@@ -544,7 +559,7 @@ fn test_project_service_get_projects_by_project_manager_without_forecasts() {
         .unwrap();
     assert_eq!(proj1_item.project_id, "PROJ-001");
     assert!(contract_values1.is_some());
-    
+
     let (proj2_item, contract_values2) = result[0]
         .projects
         .iter()
@@ -569,18 +584,18 @@ fn test_project_service_get_projects_by_project_manager_with_different_currencie
     forecast2.currency = "GBP".to_string();
     forecast2.contract_total_value = 75000.0;
     forecast2.contract_remaining_value = 56250.0;
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ForecastRepositoryTrait::insert(&repo, forecast1);
     ForecastRepositoryTrait::insert(&repo, forecast2);
-    
+
     let project_service = ProjectService::new(&repo);
     let result = project_service.get_projects_by_project_manager();
-    
+
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].projects.len(), 2);
-    
+
     // Find projects by ID (order is not guaranteed with HashMap)
     let (proj1_item, contract_values1) = result[0]
         .projects
@@ -593,7 +608,7 @@ fn test_project_service_get_projects_by_project_manager_with_different_currencie
     assert_eq!(*remaining1, 37500.0);
     assert_eq!(currency1, "EUR");
     assert_eq!(class1, "Test Class");
-    
+
     let (proj2_item, contract_values2) = result[0]
         .projects
         .iter()
@@ -616,18 +631,17 @@ fn test_project_service_get_projects_by_project_manager_sorted_alphabetically() 
     project2.project_manager = "Apple, Bob".to_string();
     let mut project3 = create_test_project("PROJ-003", "Project 3");
     project3.project_manager = "Miller, Charlie".to_string();
-    
+
     ProjectRepositoryTrait::insert(&repo, project1);
     ProjectRepositoryTrait::insert(&repo, project2);
     ProjectRepositoryTrait::insert(&repo, project3);
-    
+
     let project_service = ProjectService::new(&repo);
     let result = project_service.get_projects_by_project_manager();
-    
+
     // Should be sorted alphabetically
     assert_eq!(result.len(), 3);
     assert_eq!(result[0].project_manager, "Apple, Bob");
     assert_eq!(result[1].project_manager, "Miller, Charlie");
     assert_eq!(result[2].project_manager, "Zebra, Alice");
 }
-

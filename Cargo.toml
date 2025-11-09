@@ -11,3 +11,7 @@ chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 clap = { version = "4.5", features = ["derive"] }
+spreadsheet-ods = "0.20"
+
+[patch.crates-io]
+color-rs = { path = "patches/color-rs-0.8.0" }

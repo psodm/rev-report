@@ -67,4 +67,3 @@ pub fn truncate_string(s: &str, max_chars: usize) -> &str {
             .unwrap_or(s)
     }
 }
-

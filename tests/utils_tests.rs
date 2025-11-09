@@ -101,4 +101,3 @@ fn test_format_currency_less_than_one() {
     let result = format_currency(0.99, "USD");
     assert_eq!(result, "$0.99");
 }
-

@@ -13,13 +13,25 @@ pub struct Forecast {
     pub project_id: String,
     #[serde(rename = "Class")]
     pub class: String,
-    #[serde(rename = "Contract Start Date", deserialize_with = "deserialize_date_from_dd_mm_yyyy")]
+    #[serde(
+        rename = "Contract Start Date",
+        deserialize_with = "deserialize_date_from_dd_mm_yyyy"
+    )]
     pub start_date: NaiveDate,
-    #[serde(rename = "Contract Finish Date", deserialize_with = "deserialize_date_from_dd_mm_yyyy")]
+    #[serde(
+        rename = "Contract Finish Date",
+        deserialize_with = "deserialize_date_from_dd_mm_yyyy"
+    )]
     pub finish_date: NaiveDate,
-    #[serde(rename = "Contract Total Value", deserialize_with = "deserialize_float_from_empty_string")]
+    #[serde(
+        rename = "Contract Total Value",
+        deserialize_with = "deserialize_float_from_empty_string"
+    )]
     pub contract_total_value: f64,
-    #[serde(rename = "Contract Remaining Value", deserialize_with = "deserialize_float_from_empty_string")]
+    #[serde(
+        rename = "Contract Remaining Value",
+        deserialize_with = "deserialize_float_from_empty_string"
+    )]
     pub contract_remaining_value: f64,
     #[serde(rename = "Currency")]
     pub currency: String,
@@ -50,12 +62,12 @@ where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    
+
     if s.is_empty() {
         // Return a default date or error - using epoch as default
         return Ok(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
     }
-    
+
     // Parse dd/mm/yyyy format
     let parts: Vec<&str> = s.split('/').collect();
     if parts.len() != 3 {
@@ -64,7 +76,7 @@ where
             s
         )));
     }
-    
+
     let day = parts[0]
         .parse::<u32>()
         .map_err(|e| de::Error::custom(format!("Invalid day in date '{}': {}", s, e)))?;
@@ -74,7 +86,7 @@ where
     let year = parts[2]
         .parse::<i32>()
         .map_err(|e| de::Error::custom(format!("Invalid year in date '{}': {}", s, e)))?;
-    
+
     NaiveDate::from_ymd_opt(year, month, day)
         .ok_or_else(|| de::Error::custom(format!("Invalid date '{}': day/month out of range", s)))
 }

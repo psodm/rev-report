@@ -54,18 +54,22 @@ pub fn create_temp_projects_csv() -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let file_path = temp_dir.join(format!("test_projects_{}_{}.csv", std::process::id(), timestamp));
-    
+    let file_path = temp_dir.join(format!(
+        "test_projects_{}_{}.csv",
+        std::process::id(),
+        timestamp
+    ));
+
     // Remove file if it exists
     let _ = fs::remove_file(&file_path);
-    
+
     let mut file = File::create(&file_path).unwrap();
     writeln!(file, "\"Project ID\",\"Sales Org\",\"End Customer Name\",\"Project Name\",\"Manager\",\"Other Stakeholder\",\"Start\",\"Finish\",\"On Hold Comment\",\"On Hold\"").unwrap();
     writeln!(file, "\"code\",\"z_sales_org\",\"z_end_customer_name\",\"name\",\"manager\",\"z_other_stakeholder\",\"scheduleStart\",\"scheduleFinish\",\"z_ca_svcs_proj_holdcom\",\"z_ca_svcs_proj_hold\"").unwrap();
     writeln!(file, "\"PROJ-001\",\"TEST-ORG-1\",\"Test Customer 1\",\"Test Project 1\",\"Manager 1\",\"AE 1\",\"2024-01-01\",\"2024-12-31\",\"\",\"false\"").unwrap();
     writeln!(file, "\"PROJ-002\",\"TEST-ORG-2\",\"Test Customer 2\",\"Test Project 2\",\"Manager 2\",,\"2025-01-01\",\"2025-12-31\",\"On hold for review\",\"true\"").unwrap();
     writeln!(file, "\"PROJ-003\",\"TEST-ORG-3\",\"Test Customer 3\",\"Test Project 3\",\"Manager 3\",\"AE 3\",\"2026-01-01\",\"2026-12-31\",\"\",\"false\"").unwrap();
-    
+
     file_path
 }
 
@@ -77,11 +81,15 @@ pub fn create_temp_forecasts_csv() -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let file_path = temp_dir.join(format!("test_forecasts_{}_{}.csv", std::process::id(), timestamp));
-    
+    let file_path = temp_dir.join(format!(
+        "test_forecasts_{}_{}.csv",
+        std::process::id(),
+        timestamp
+    ));
+
     // Remove file if it exists
     let _ = fs::remove_file(&file_path);
-    
+
     let mut file = File::create(&file_path).unwrap();
     // First row: date headers
     writeln!(file, ",,,,,,,,,,\"November 01, 2025\",\"December 01, 2025\",\"January 01, 2026\",\"February 01, 2026\",\"March 01, 2026\",\"April 01, 2026\"").unwrap();
@@ -91,7 +99,6 @@ pub fn create_temp_forecasts_csv() -> PathBuf {
     writeln!(file, "Test Company 1,Manager 1,Test Project 1,PROJ-001,FP,01/01/2024,31/12/2024,100000.0,75000.0,USD,10000.0,15000.0,20000.0,15000.0,10000.0,5000.0").unwrap();
     writeln!(file, "Test Company 2,Manager 2,Test Project 2,PROJ-002,FP,01/01/2025,31/12/2025,200000.0,150000.0,USD,20000.0,25000.0,30000.0,25000.0,20000.0,10000.0").unwrap();
     writeln!(file, "Test Company 3,Manager 3,Test Project 3,PROJ-003,FP,01/01/2026,31/12/2026,300000.0,225000.0,USD,30000.0,35000.0,40000.0,35000.0,30000.0,15000.0").unwrap();
-    
+
     file_path
 }
-

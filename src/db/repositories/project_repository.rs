@@ -84,9 +84,7 @@ impl ProjectRepositoryTrait for ProjectRepository {
     fn delete_by_id(&self, project_id: &str) -> bool {
         info!(project_id = %project_id, "Deleting project by ID");
         let deleted = match self.data.lock() {
-            Ok(mut data) => {
-                data.remove(project_id).is_some()
-            }
+            Ok(mut data) => data.remove(project_id).is_some(),
             Err(poison_error) => {
                 // Recover from poison - data is still valid
                 warn!(project_id = %project_id, "Mutex poisoned during delete_by_id, recovering lock");

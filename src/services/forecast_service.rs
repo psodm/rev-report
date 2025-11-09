@@ -91,7 +91,9 @@ impl<'a> ForecastService<'a> {
 
     /// Calculates revenue summaries grouped by Account Executive
     /// Returns a vector of RevenueSummaryByAccountExecutive, sorted by Account Executive name
-    pub fn get_revenue_summary_by_account_executive(&self) -> Vec<RevenueSummaryByAccountExecutive> {
+    pub fn get_revenue_summary_by_account_executive(
+        &self,
+    ) -> Vec<RevenueSummaryByAccountExecutive> {
         let span = tracing::info_span!("get_revenue_summary_by_account_executive");
         let _guard = span.enter();
         info!("Calculating revenue summaries by Account Executive");
@@ -99,7 +101,10 @@ impl<'a> ForecastService<'a> {
         let all_projects = ProjectRepositoryTrait::find_all(self.repository);
         let mut summaries: HashMap<String, (f64, f64, f64, f64, f64, f64)> = HashMap::new();
 
-        trace!(total_projects = all_projects.len(), "Processing projects for revenue summary");
+        trace!(
+            total_projects = all_projects.len(),
+            "Processing projects for revenue summary"
+        );
 
         for project in all_projects {
             // Get the account executive name, skip if empty or None
@@ -109,13 +114,16 @@ impl<'a> ForecastService<'a> {
             };
 
             // Get the forecast for this project
-            let forecast = match ForecastRepositoryTrait::find_by_id(self.repository, &project.project_id) {
-                Some(f) => f,
-                None => continue, // Skip projects without a forecast
-            };
+            let forecast =
+                match ForecastRepositoryTrait::find_by_id(self.repository, &project.project_id) {
+                    Some(f) => f,
+                    None => continue, // Skip projects without a forecast
+                };
 
             // Get or create the summary for this Account Executive
-            let summary = summaries.entry(account_executive.clone()).or_insert((0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+            let summary = summaries
+                .entry(account_executive.clone())
+                .or_insert((0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
             // Add this project's forecast amounts to the totals
             summary.0 += forecast.month1_labor_revenue_commit;
@@ -135,8 +143,8 @@ impl<'a> ForecastService<'a> {
         // Convert to vector and sort by Account Executive name
         let mut result: Vec<RevenueSummaryByAccountExecutive> = summaries
             .into_iter()
-            .map(|(account_executive, (m1, m2, m3, m4, m5, m6))| {
-                RevenueSummaryByAccountExecutive {
+            .map(
+                |(account_executive, (m1, m2, m3, m4, m5, m6))| RevenueSummaryByAccountExecutive {
                     account_executive,
                     month1_total: m1,
                     month2_total: m2,
@@ -144,14 +152,20 @@ impl<'a> ForecastService<'a> {
                     month4_total: m4,
                     month5_total: m5,
                     month6_total: m6,
-                }
-            })
+                },
+            )
             .collect();
 
         result.sort_by(|a, b| a.account_executive.cmp(&b.account_executive));
 
-        debug!(ae_count = result.len(), "Calculated revenue summaries by Account Executive");
-        info!(ae_count = result.len(), "Retrieved revenue summaries grouped by Account Executive");
+        debug!(
+            ae_count = result.len(),
+            "Calculated revenue summaries by Account Executive"
+        );
+        info!(
+            ae_count = result.len(),
+            "Retrieved revenue summaries grouped by Account Executive"
+        );
 
         result
     }
@@ -164,7 +178,7 @@ impl<'a> ForecastService<'a> {
         info!("Calculating total revenue forecast across all projects");
 
         let all_forecasts = ForecastRepositoryTrait::find_all(self.repository);
-        
+
         let mut month1_total = 0.0;
         let mut month2_total = 0.0;
         let mut month3_total = 0.0;
@@ -172,7 +186,10 @@ impl<'a> ForecastService<'a> {
         let mut month5_total = 0.0;
         let mut month6_total = 0.0;
 
-        trace!(total_forecasts = all_forecasts.len(), "Summing revenue forecasts");
+        trace!(
+            total_forecasts = all_forecasts.len(),
+            "Summing revenue forecasts"
+        );
 
         for forecast in all_forecasts {
             month1_total += forecast.month1_labor_revenue_commit;
@@ -193,7 +210,14 @@ impl<'a> ForecastService<'a> {
             "Calculated total revenue forecast"
         );
 
-        (month1_total, month2_total, month3_total, month4_total, month5_total, month6_total)
+        (
+            month1_total,
+            month2_total,
+            month3_total,
+            month4_total,
+            month5_total,
+            month6_total,
+        )
     }
 
     /// Calculates revenue summaries grouped by Sales Org
@@ -206,7 +230,10 @@ impl<'a> ForecastService<'a> {
         let all_projects = ProjectRepositoryTrait::find_all(self.repository);
         let mut summaries: HashMap<String, (f64, f64, f64, f64, f64, f64)> = HashMap::new();
 
-        trace!(total_projects = all_projects.len(), "Processing projects for Sales Org revenue summary");
+        trace!(
+            total_projects = all_projects.len(),
+            "Processing projects for Sales Org revenue summary"
+        );
 
         for project in all_projects {
             // Get the Sales Org, skip if empty
@@ -217,7 +244,10 @@ impl<'a> ForecastService<'a> {
             }
 
             // Get the forecast for this project
-            let forecast = match ForecastRepositoryTrait::find_by_id(self.repository, &project.project_id) {
+            let forecast = match ForecastRepositoryTrait::find_by_id(
+                self.repository,
+                &project.project_id,
+            ) {
                 Some(f) => f,
                 None => {
                     trace!(project_id = %project.project_id, "Skipping project without forecast");
@@ -226,7 +256,9 @@ impl<'a> ForecastService<'a> {
             };
 
             // Get or create the summary for this Sales Org
-            let summary = summaries.entry(sales_org.to_string()).or_insert((0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+            let summary = summaries
+                .entry(sales_org.to_string())
+                .or_insert((0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
             // Add this project's forecast amounts to the totals
             summary.0 += forecast.month1_labor_revenue_commit;
@@ -246,8 +278,8 @@ impl<'a> ForecastService<'a> {
         // Convert to vector and sort by Sales Org name
         let mut result: Vec<RevenueSummaryBySalesOrg> = summaries
             .into_iter()
-            .map(|(sales_org, (m1, m2, m3, m4, m5, m6))| {
-                RevenueSummaryBySalesOrg {
+            .map(
+                |(sales_org, (m1, m2, m3, m4, m5, m6))| RevenueSummaryBySalesOrg {
                     sales_org,
                     month1_total: m1,
                     month2_total: m2,
@@ -255,14 +287,20 @@ impl<'a> ForecastService<'a> {
                     month4_total: m4,
                     month5_total: m5,
                     month6_total: m6,
-                }
-            })
+                },
+            )
             .collect();
 
         result.sort_by(|a, b| a.sales_org.cmp(&b.sales_org));
 
-        debug!(sales_org_count = result.len(), "Calculated revenue summaries by Sales Org");
-        info!(sales_org_count = result.len(), "Retrieved revenue summaries grouped by Sales Org");
+        debug!(
+            sales_org_count = result.len(),
+            "Calculated revenue summaries by Sales Org"
+        );
+        info!(
+            sales_org_count = result.len(),
+            "Retrieved revenue summaries grouped by Sales Org"
+        );
 
         result
     }

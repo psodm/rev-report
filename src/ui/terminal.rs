@@ -2,10 +2,11 @@ use crate::db::csv_loader::load_data_from_csvs;
 use crate::db::repositories::in_memory_repository::InMemoryRepository;
 use crate::db::repositories::project_repository::ProjectRepositoryTrait;
 use crate::models::project::Project;
+use crate::ods::save_forecast_by_sales_org;
 use crate::services::forecast_service::ForecastService;
 use crate::services::project_service::ProjectService;
 use crate::utils::utils::{format_currency, truncate_string};
-use dialoguer::{Input, Select};
+use dialoguer::{Confirm, Input, Select};
 use std::path::Path;
 use tracing::{debug, error, info, trace, warn};
 
@@ -842,7 +843,7 @@ fn display_forecast_by_sales_org(forecast_service: &ForecastService) {
     );
     println!("{:-<150}", "");
 
-    for summary in summaries {
+    for summary in &summaries {
         println!(
             "{:<30} {:>18} {:>18} {:>18} {:>18} {:>18} {:>18}",
             truncate_string(&summary.sales_org, 28),
@@ -857,6 +858,32 @@ fn display_forecast_by_sales_org(forecast_service: &ForecastService) {
 
     println!("{:-<150}", "");
     println!();
+
+    match Confirm::new()
+        .with_prompt("Save results to forecast_by_sales_org.ods?")
+        .default(false)
+        .interact()
+    {
+        Ok(true) => match save_forecast_by_sales_org(&summaries) {
+            Ok(path) => {
+                println!("✅ Saved results to {}", path.display());
+                println!();
+            }
+            Err(err) => {
+                error!(error = %err, "Failed to save Sales Org forecast ODS report");
+                println!("❌ Failed to save ODS file: {}", err);
+                println!();
+            }
+        },
+        Ok(false) => {
+            info!("User chose not to save Sales Org forecast to ODS");
+        }
+        Err(err) => {
+            error!(error = %err, "Failed to read confirmation input for ODS export");
+            println!("❌ Could not read confirmation input: {}", err);
+            println!();
+        }
+    }
 
     debug!(
         sales_org_count = total_count,
@@ -877,16 +904,16 @@ pub fn show_main_menu(project_service: &ProjectService, forecast_service: &Forec
         println!();
 
         let options = vec![
-            "Show projects with no forecast",
-            "Show on-hold projects",
-            "Show on-hold projects by Account Executive",
-            "Show projects without Account Executive",
-            "Show all Account Executives",
-            "Show forecasts by Project Manager",
-            "Show all projects by Project Manager",
-            "Show revenue summary for Account Executive",
-            "Show total revenue forecast (all projects)",
-            "Show forecast for Sales Orgs",
+            "Projects with no forecast",
+            "On-hold projects",
+            "On-hold projects by Account Executive",
+            "Projects without Account Executive",
+            "All Account Executives",
+            "Forecasts by Project Manager",
+            "All projects by Project Manager",
+            "Revenue summary for Account Executive",
+            "Total revenue forecast (all projects)",
+            "Forecast for Sales Orgs",
             "Exit",
         ];
 
